@@ -61,8 +61,8 @@ Cpu::Cpu() {
   op_table[0x31] = {&Cpu::LD, &Cpu::AM_RR_NN, regSP, None, No_cond};
   op_table[0x32] = {&Cpu::LD, &Cpu::AM_I16_R, regHLaddD, regA, No_cond};
   op_table[0x33] = {&Cpu::INC, &Cpu::AM_RR, regSP, None, No_cond};
-  op_table[0x34] = {&Cpu::INC, &Cpu::AM_I16_R, regHL, None, No_cond};
-  op_table[0x35] = {&Cpu::DEC, &Cpu::AM_I16_R, regHL, None, No_cond};
+  op_table[0x34] = {&Cpu::INC, &Cpu::AM_I16, regHL, None, No_cond};
+  op_table[0x35] = {&Cpu::DEC, &Cpu::AM_I16, regHL, None, No_cond};
   op_table[0x36] = {&Cpu::LD, &Cpu::AM_I16_D8, regHL, None, No_cond};
   op_table[0x37] = {&Cpu::SCF, &Cpu::NONE, None, None, No_cond};
   op_table[0x38] = {&Cpu::JR, &Cpu::AM_R_D8, None, None, C_cond};
@@ -337,12 +337,25 @@ uint8_t Cpu::get_flag(flags flag) { return (af.Reg8.lower & flag) ? 1 : 0; }
 
 void Cpu::change_flag(flags flag) { af.Reg8.lower ^= flag; }
 
+void Cpu::clear_flag(flags flag) { af.Reg8.lower &= ~flag; }
+
+void Cpu::set_flag(flags flag) { af.Reg8.lower |= flag; }
+
 // Address mode implementations
 void Cpu::NONE() {}
 
 void Cpu::AM_R() {
   this->operand1 = get_reg(this->act_instruction->reg1);
   address_type = to_reg;
+  bit16 = false;
+}
+
+void Cpu::AM_I16() {
+  exec_cycle(1);
+  this->operand1 = read(get_reg(this->act_instruction->reg1));
+  this->address = get_reg(this->act_instruction->reg1);
+
+  address_type = to_memory;
   bit16 = false;
 }
 
@@ -566,18 +579,246 @@ void Cpu::POP() {
   set_reg(act_instruction->reg1, (higher_byte << 8) | lower_byte);
 }
 
+// Add to register
 void Cpu::ADD() {
   if (!bit16) {
     uint16_t result = get_reg(act_instruction->reg1) + operand2;
-    if (result > UINT8_MAX && get_flag(cy) == 0)
-      change_flag(cy);
-    if ((get_reg(act_instruction->reg1) & 0x0F) + (operand2 & 0x0F) > 0x0F &&
-        get_flag(h) == 0)
-      change_flag(h);
+    if (result > 0xFF)
+      set_flag(cy);
+    else
+      clear_flag(cy);
+    if ((get_reg(act_instruction->reg1) & 0x0F) + (operand2 & 0x0F) > 0x0F)
+      set_flag(h);
+    else
+      clear_flag(h);
+
     if (result == 0)
-      change_flag(z);
-    if (result & 0x80)
-      change_flag(n);
+      set_flag(z);
+    else
+      clear_flag(z);
+
     set_reg(act_instruction->reg1, result);
+  } else {
+    uint16_t low_result =
+        (get_reg(act_instruction->reg1) & 0x00FF) + (operand2 & 0x00FF);
+
+    uint16_t high_result =
+        (get_reg(act_instruction->reg1) >> 8) + (operand2 >> 8);
+
+    if (low_result > 0xFF)
+      set_flag(cy);
+    else
+      clear_flag(cy);
+
+    if (low_result & 0x0F)
+      set_flag(h);
+    else
+      clear_flag(h);
+
+    exec_cycle(1);
+
+    high_result += get_flag(cy);
+    if (high_result > 0xFF)
+      set_flag(cy);
+    else
+      clear_flag(cy);
+    if (high_result & 0x0F)
+      set_flag(h);
+    else
+      clear_flag(h);
+
+    clear_flag(z);
+
+    set_reg(act_instruction->reg1, (high_result << 8) | low_result);
+  }
+  clear_flag(n);
+}
+
+// Add with carry to register A
+void Cpu::ADC() {
+  uint16_t result = af.Reg8.higher + operand2 + get_flag(cy);
+  if (result > 0xFF)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+  if ((get_reg(act_instruction->reg1) & 0x0F) + (operand2 & 0x0F) > 0x0F)
+    set_flag(h);
+  else
+    clear_flag(h);
+
+  if (result == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+
+  af.Reg8.higher = (uint8_t)(result & 0x00FF);
+}
+
+// Substracts from A register
+void Cpu::SUB() {
+  uint16_t result = af.Reg8.higher - operand2;
+  if (result > 0xFF)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+  if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+    set_flag(h);
+  else
+    clear_flag(h);
+
+  if (result == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  set_flag(n);
+
+  af.Reg8.higher = (uint8_t)(result & 0x00FF);
+}
+
+// Substracts from A register with carry
+void Cpu::SBC() {
+  uint16_t result = af.Reg8.higher - operand2 - get_flag(cy);
+  if (result > 0xFF)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+  if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+    set_flag(h);
+  else
+    clear_flag(h);
+
+  if (result == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  set_flag(n);
+
+  af.Reg8.higher = (uint8_t)(result & 0x00FF);
+}
+
+// Performs And bitwise operation with A register
+void Cpu::AND() {
+  af.Reg8.higher &= operand2;
+
+  if (af.Reg8.higher == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  set_flag(h);
+  clear_flag(cy);
+}
+
+// Performs Or bitwise operation with A register
+void Cpu::OR() {
+  af.Reg8.higher |= operand2;
+
+  if (af.Reg8.higher == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+  clear_flag(cy);
+}
+
+// Performs Xor bitwise operation with A register
+void Cpu::XOR() {
+  af.Reg8.higher ^= operand2;
+
+  if (af.Reg8.higher == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+  clear_flag(cy);
+}
+
+// Compares a operand with the A register
+void Cpu::CP() {
+  uint16_t result = af.Reg8.higher - operand2;
+
+  if (result > 0xFF)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+  if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+    set_flag(h);
+  else
+    clear_flag(h);
+
+  if (result == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  set_flag(n);
+}
+
+// Increments by 1
+void Cpu::INC() {
+  if (!bit16) {
+    uint16_t result = this->operand1 + 1;
+
+    if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+      set_flag(h);
+    else
+      clear_flag(h);
+
+    if (result == 0)
+      set_flag(z);
+    else
+      clear_flag(z);
+
+    clear_flag(n);
+
+    if (address_type == to_reg)
+      set_reg(this->act_instruction->reg1, (uint8_t)(result & 0x00FF));
+    else {
+      exec_cycle(1);
+      write((uint8_t)(result & 0x00FF), this->address);
+    }
+
+  } else {
+    exec_cycle(1);
+    set_reg(this->act_instruction->reg1, this->operand1 + 1);
+  }
+}
+
+// Decrements by 1
+void Cpu::DEC() {
+  if (!bit16) {
+    uint16_t result = this->operand1 - 1;
+
+    if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+      set_flag(h);
+    else
+      clear_flag(h);
+
+    if (result == 0)
+      set_flag(z);
+    else
+      clear_flag(z);
+
+    set_flag(n);
+
+    if (address_type == to_reg)
+      set_reg(this->act_instruction->reg1, (uint8_t)(result & 0x00FF));
+    else {
+      exec_cycle(1);
+      write((uint8_t)(result & 0x00FF), this->address);
+    }
+
+  } else {
+    exec_cycle(1);
+    set_reg(this->act_instruction->reg1, this->operand1 - 1);
   }
 }

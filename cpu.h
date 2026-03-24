@@ -61,12 +61,15 @@ private:
 
   uint8_t get_flag(flags flag);
   void change_flag(flags flag);
+  void clear_flag(flags flag);
+  void set_flag(flags flag);
 
   void exec_cycle(uint8_t num_cycles);
 
   // Address modes
   void NONE();
   void AM_R();
+  void AM_I16();
   void AM_R_R();
   void AM_R_D8();
   void AM_R_I16();
