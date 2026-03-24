@@ -123,7 +123,7 @@ private:
   void RST();
   void RETI();
 
-  void DDA();
+  void DAA();
   void CPL();
   void SCF();
   void CCF();

@@ -47,7 +47,7 @@ Cpu::Cpu() {
   op_table[0x24] = {&Cpu::INC, &Cpu::AM_R, regH, None, No_cond};
   op_table[0x25] = {&Cpu::DEC, &Cpu::AM_R, regH, None, No_cond};
   op_table[0x26] = {&Cpu::LD, &Cpu::AM_R_D8, regH, None, No_cond};
-  op_table[0x27] = {&Cpu::DDA, &Cpu::NONE, None, None, No_cond};
+  op_table[0x27] = {&Cpu::DAA, &Cpu::NONE, None, None, No_cond};
   op_table[0x28] = {&Cpu::JR, &Cpu::AM_R_D8, None, None, Z_cond};
   op_table[0x29] = {&Cpu::ADD, &Cpu::AM_RR_RR, regHL, regHL, No_cond};
   op_table[0x2A] = {&Cpu::LD, &Cpu::AM_R_I16, regA, regHLaddI, No_cond};
@@ -821,4 +821,111 @@ void Cpu::DEC() {
     exec_cycle(1);
     set_reg(this->act_instruction->reg1, this->operand1 - 1);
   }
+}
+
+void Cpu::DAA() {
+  uint16_t result = af.Reg8.higher;
+  if ((result & 0x0F) > 0x09) {
+    result += 0x06;
+    if (result > (uint8_t)0xFF)
+      set_flag(cy);
+    else
+      clear_flag(cy);
+  }
+  if ((result & 0xF0) > 0x90) {
+    result += 0x60;
+    set_flag(cy);
+  }
+  if (result == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  // clear_flag(n);
+  clear_flag(h);
+
+  af.Reg8.higher = (uint8_t)(result & 0x00FF);
+}
+
+// Take complement of register A
+void Cpu::CPL() {
+  af.Reg8.higher = ~af.Reg8.higher;
+  set_flag(n);
+  set_flag(h);
+}
+
+// Set carry flag
+void Cpu::SCF() {
+  set_flag(cy);
+  clear_flag(n);
+  clear_flag(h);
+}
+
+// flips carry flag
+void Cpu::CCF() {
+  change_flag(cy);
+  clear_flag(n);
+  clear_flag(h);
+}
+
+// Rotate register A to the left circular
+void Cpu::RLCA() {
+  if ((af.Reg8.higher & 0x80) == 0x80)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  af.Reg8.higher <<= 1;
+  af.Reg8.higher |= get_flag(cy);
+
+  clear_flag(z);
+  clear_flag(n);
+  clear_flag(h);
+}
+
+// Rotate register A to the left
+void Cpu::RLA() {
+  uint8_t previus_carry = get_flag(cy);
+  if ((af.Reg8.higher & 0x80) == 0x80)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  af.Reg8.higher <<= 1;
+  af.Reg8.higher |= previus_carry;
+
+  clear_flag(z);
+  clear_flag(n);
+  clear_flag(h);
+}
+
+// Rotate register A to the right circular
+void Cpu::RRCA() {
+  if ((af.Reg8.higher & 0x01) == 0x01)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  af.Reg8.higher >>= 1;
+  af.Reg8.higher |= (7 << get_flag(cy));
+
+  clear_flag(z);
+  clear_flag(n);
+  clear_flag(h);
+}
+
+// Rotate register A to the right
+void Cpu::RRA() {
+  uint8_t previus_carry = get_flag(cy);
+  if ((af.Reg8.higher & 0x01) == 0x01)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  af.Reg8.higher >>= 1;
+  af.Reg8.higher |= (7 << previus_carry);
+
+  clear_flag(z);
+  clear_flag(n);
+  clear_flag(h);
 }
