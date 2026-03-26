@@ -221,6 +221,7 @@ Cpu::Cpu() {
   op_table[0xC8] = {&Cpu::RET, &Cpu::NONE, None, None, Z_cond};
   op_table[0xC9] = {&Cpu::RET, &Cpu::NONE, None, None, No_cond};
   op_table[0xCA] = {&Cpu::JP, &Cpu::NONE, None, None, Z_cond};
+  op_table[0xCB] = {&Cpu::CB, &Cpu::NONE};
   op_table[0xCC] = {&Cpu::CALL, &Cpu::NONE, None, None, Z_cond};
   op_table[0xCD] = {&Cpu::CALL, &Cpu::NONE, None, None, No_cond};
   op_table[0xCE] = {&Cpu::ADC, &Cpu::AM_R_D8, regA, None, No_cond};
@@ -297,6 +298,21 @@ uint16_t Cpu::get_reg(reg_code type) {
     return this->hl.Reg8.higher;
   case regL:
     return this->hl.Reg8.lower;
+  case regAF:
+    return this->af.reg;
+  case regBC:
+    return this->bc.reg;
+  case regDE:
+    return this->de.reg;
+  case regHL:
+  case regHLadd:
+  case regHLaddI:
+  case regHLaddD:
+    return this->hl.reg;
+  case regPC:
+    return this->pc;
+  case regSP:
+    return this->sp;
   default:
     return 0x00;
   }
@@ -340,6 +356,22 @@ void Cpu::change_flag(flags flag) { af.Reg8.lower ^= flag; }
 void Cpu::clear_flag(flags flag) { af.Reg8.lower &= ~flag; }
 
 void Cpu::set_flag(flags flag) { af.Reg8.lower |= flag; }
+
+bool Cpu::eval_cond() {
+  switch (this->act_instruction->condition) {
+  case No_cond:
+    return true;
+  case NC_cond:
+    return (!get_flag(cy));
+  case NZ_cond:
+    return (!get_flag(z));
+  case C_cond:
+    return (get_flag(cy));
+  case Z_cond:
+    return (get_flag(z));
+    break;
+  }
+}
 
 // Address mode implementations
 void Cpu::NONE() {}
@@ -539,6 +571,64 @@ void Cpu::AM_HL_SP_S8() {
 
 // Instruction implementations
 void Cpu::NOP() {}
+
+void Cpu::STOP() {}
+
+void Cpu::HALT() { is_halted = true; }
+
+void Cpu::EI() { IME = true; }
+
+void Cpu::DI() { IME = false; }
+
+void Cpu::CB() {
+  exec_cycle(1);
+  uint8_t cb_opcode = read(pc++);
+  opcode = cb_opcode;
+  if (cb_opcode <= 0x07) {
+    RLC();
+    return;
+  }
+  if (cb_opcode <= 0x0F) {
+    RRC();
+    return;
+  }
+  if (cb_opcode <= 0x17) {
+    RL();
+    return;
+  }
+  if (cb_opcode <= 0x1F) {
+    RR();
+    return;
+  }
+  if (cb_opcode <= 0x27) {
+    SLA();
+    return;
+  }
+  if (cb_opcode <= 0x2F) {
+    SRA();
+    return;
+  }
+  if (cb_opcode <= 0x37) {
+    SWAP();
+    return;
+  }
+  if (cb_opcode <= 0x3F) {
+    SRL();
+    return;
+  }
+  if (cb_opcode <= 0x7F) {
+    BIT();
+    return;
+  }
+  if (cb_opcode <= 0xBF) {
+    RES();
+    return;
+  }
+  if (cb_opcode <= 0xFF) {
+    SET();
+    return;
+  }
+}
 
 // Loads data to a register or address in memory
 void Cpu::LD() {
@@ -928,4 +1018,430 @@ void Cpu::RRA() {
   clear_flag(z);
   clear_flag(n);
   clear_flag(h);
+}
+
+// jump to address
+void Cpu::JP() {
+  if (this->act_instruction->reg1 == regHL) {
+    pc = hl.reg;
+  } else {
+    exec_cycle(1);
+    uint8_t lower_byte = read(pc++);
+    exec_cycle(1);
+    uint8_t higher_byte = read(pc++);
+
+    this->address = (higher_byte << 8) | lower_byte;
+    if (eval_cond()) {
+      exec_cycle(1);
+      pc = address;
+    }
+  }
+}
+
+// jump to relative address
+void Cpu::JR() {
+
+  exec_cycle(1);
+  int8_t s8 = read(pc++);
+
+  if (eval_cond()) {
+    exec_cycle(1);
+    pc += s8;
+  }
+}
+
+// call function
+void Cpu::CALL() {
+  exec_cycle(1);
+  uint8_t lower_byte = read(pc++);
+  exec_cycle(1);
+  uint8_t higher_byte = read(pc++);
+
+  this->address = (higher_byte << 8) | lower_byte;
+
+  if (eval_cond()) {
+    exec_cycle(1);
+    sp--;
+
+    exec_cycle(1);
+    write((uint8_t)(pc >> 8), sp--);
+    exec_cycle(1);
+    write((uint8_t)(pc & 0x00FF), sp);
+    pc = this->address;
+  }
+}
+
+// return from function
+void Cpu::RET() {
+  if (this->act_instruction->condition != No_cond)
+    exec_cycle(1);
+  if (eval_cond()) {
+    exec_cycle(1);
+    uint8_t lower_byte = read(sp++);
+    exec_cycle(1);
+    uint8_t higher_byte = read(sp++);
+
+    exec_cycle(1);
+    pc = (higher_byte << 8) | (lower_byte);
+  }
+}
+
+// return from a function, enable IME
+void Cpu::RETI() {
+  exec_cycle(1);
+  uint8_t lower_byte = read(sp++);
+  exec_cycle(1);
+  uint8_t higher_byte = read(sp++);
+
+  exec_cycle(1);
+  pc = (higher_byte << 8) | (lower_byte);
+  IME = true;
+}
+
+// restart / function call to fixed address
+void Cpu::RST() {
+  uint8_t n = opcode & 0b00111000;
+  exec_cycle(1);
+  sp--;
+  exec_cycle(1);
+  write((pc >> 8), sp--);
+  exec_cycle(1);
+  write((pc & 0x00FF), sp);
+  pc = (0x0000) | n;
+}
+
+// Rotate left circular
+void Cpu::RLC() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  if ((operand & 0x01) == 0x01)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand <<= 1;
+  operand |= get_flag(cy);
+
+  clear_flag(z);
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// Rotate right circular
+void Cpu::RRC() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  if ((operand & 0x80) == 0x80)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand >>= 1;
+  operand |= (get_flag(cy) << 7);
+
+  clear_flag(z);
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// Rotate left
+void Cpu::RL() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  uint8_t previus_carry = get_flag(cy);
+
+  if ((operand & 0x80) == 0x80)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand <<= 1;
+  operand |= previus_carry;
+
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// Rotate right
+void Cpu::RR() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  uint8_t previus_carry = get_flag(cy);
+
+  if ((operand & 0x01) == 0x01)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand >>= 1;
+  operand |= (previus_carry << 7);
+
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// Shift left arithmetic
+void Cpu::SLA() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  if ((operand & 0x80) == 0x80)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand <<= 1;
+  operand &= 0xFE;
+
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// Shift right arithmetic
+void Cpu::SRA() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  if ((operand & 0x01) == 0x01)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand = (operand & 0x80) | (operand >> 1);
+
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+void Cpu::SWAP() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  operand = (operand << 4) | (operand >> 4);
+
+  if (operand == 0) {
+    set_flag(z);
+  } else {
+    clear_flag(z);
+  }
+
+  clear_flag(cy);
+  clear_flag(h);
+  clear_flag(n);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+void Cpu::SRL() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  if ((operand & 0x01) == 0x01)
+    set_flag(cy);
+  else
+    clear_flag(cy);
+
+  operand >>= 1;
+
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
+  clear_flag(n);
+  clear_flag(h);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// test bit
+void Cpu::BIT() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  uint8_t bit = (opcode & 0x28);
+  uint8_t result = operand & (1 << bit);
+
+  if (result == 0) {
+    set_flag(z);
+  } else {
+    clear_flag(z);
+  }
+
+  clear_flag(n);
+  set_flag(h);
+}
+
+// Reset bit of register
+void Cpu::RES() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  uint8_t bit = (opcode & 0x28);
+  operand &= ~(1 << bit);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
+}
+
+// Set bit of register
+void Cpu::SET() {
+  reg_code reg = (reg_code)(opcode & 0x07);
+  uint8_t operand;
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    operand = read(pc++);
+  } else {
+    operand = get_reg(reg);
+  }
+
+  uint8_t bit = (opcode & 0x28);
+  operand &= (1 << bit);
+
+  if (reg == regHLadd) {
+    exec_cycle(1);
+    write(operand, hl.reg);
+  } else {
+    set_reg(reg, operand);
+  }
 }

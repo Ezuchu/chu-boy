@@ -41,6 +41,9 @@ private:
 
   bool bit16 = false;
 
+  bool is_halted = false;
+  bool IME = false;
+
   Bus *bus = nullptr;
 
   std::array<instruction, 256> op_table;
@@ -65,6 +68,8 @@ private:
   void set_flag(flags flag);
 
   void exec_cycle(uint8_t num_cycles);
+
+  bool eval_cond();
 
   // Address modes
   void NONE();
@@ -94,6 +99,7 @@ private:
   void HALT();
   void DI();
   void EI();
+  void CB();
 
   void LD();
   void POP();
@@ -106,6 +112,18 @@ private:
   void RLCA();
   void RRA();
   void RRCA();
+
+  void RLC();
+  void RRC();
+  void RL();
+  void RR();
+  void SLA();
+  void SRA();
+  void SWAP();
+  void SRL();
+  void BIT();
+  void RES();
+  void SET();
 
   void ADD();
   void SUB();
