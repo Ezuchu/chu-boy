@@ -5,21 +5,21 @@ class Cpu;
 
 enum reg_code {
   None,
-  regA,
+  regA = 7,
   regF,
-  regB,
-  regC,
-  regD,
-  regE,
-  regH,
-  regL,
-  regHLadd,
-  regHLaddI,
-  regHLaddD,
-  regAF,
-  regBC,
-  regDE,
-  regHL,
+  regB = 0,
+  regC = 1,
+  regD = 2,
+  regE = 3,
+  regH = 4,
+  regL = 5,
+  regHLadd = 6,
+  regHLaddI = 9,
+  regHLaddD = 10,
+  regAF = 11,
+  regBC = 12,
+  regDE = 13,
+  regHL = 14,
   regPC,
   regSP
 };
@@ -56,4 +56,5 @@ struct instruction {
   reg_code reg1 = None;
   reg_code reg2 = None;
   flag_cond condition = No_cond;
+  uint8_t parameter = 0;
 };

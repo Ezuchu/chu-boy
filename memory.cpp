@@ -16,3 +16,5 @@ uint8_t Memory::read(uint16_t address) { return this->data[address]; }
 void Memory::write(uint8_t data, uint16_t address) {
   this->data[address] = data;
 }
+
+uint8_t *Memory::get_address(uint16_t address) { return &this->data[address]; }

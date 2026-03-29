@@ -270,7 +270,12 @@ Cpu::Cpu() {
 
 void Cpu::connectBus(Bus *bus) { Cpu::bus = bus; }
 
-void Cpu::fetch_instruction() { Cpu::opcode = Cpu::read(Cpu::pc); }
+void Cpu::fetch_instruction() {
+  Cpu::opcode = Cpu::read(Cpu::pc++);
+  this->act_instruction = &op_table[opcode];
+}
+void Cpu::execute_mode() { (this->*act_instruction->mode)(); }
+void Cpu::execute_instruction() { (this->*act_instruction->operate)(); }
 
 void Cpu::fetch() {}
 void Cpu::decode() {}
@@ -370,6 +375,14 @@ bool Cpu::eval_cond() {
   case Z_cond:
     return (get_flag(z));
     break;
+  }
+}
+
+void Cpu::step() {
+  if (!is_halted) {
+    fetch_instruction();
+    execute_mode();
+    execute_instruction();
   }
 }
 

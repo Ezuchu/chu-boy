@@ -3,19 +3,22 @@
 #include "cpu.h"
 #include "mbc.h"
 #include "memory.h"
+#include "ppu.h"
 #include <array>
 #include <cstdint>
 
 class rom_controller;
-class Ppu;
 
 class Bus {
-
+public:
   Memory ram;
   Memory Vram;
+  Memory Oam;
+  Memory io;
+  Memory hram;
 
-public:
   Cpu cpu;
+  Ppu ppu;
   rom_controller *rom = nullptr;
 
   Bus();

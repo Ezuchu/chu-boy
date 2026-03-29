@@ -152,4 +152,5 @@ public:
   ~Cpu();
 
   void connectBus(Bus *bus);
+  void step();
 };
