@@ -18,16 +18,16 @@ private:
     reg16 reg;
 
     struct {
-      uint8_t higher;
       uint8_t lower;
+      uint8_t higher;
     } Reg8;
   };
   enum flags { z = (0x80), n = (0x40), h = (0x20), cy = (0x10) };
   enum add_type { to_reg, to_memory };
 
-  Register af, bc, de, hl = {0x00};
-  reg16 sp = 0x00;
-  reg16 pc = 0x00;
+  Register af = {0x0100}, bc = {0x0000}, de = {0x0000}, hl = {0x0000};
+  reg16 sp = 0xFFFE;
+  reg16 pc = 0x0100;
 
   uint8_t cycles;
   uint8_t remaining_cycle;

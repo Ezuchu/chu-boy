@@ -8,6 +8,7 @@
 #include <cstdint>
 
 class rom_controller;
+class Vga;
 
 class Bus {
 public:
@@ -20,6 +21,7 @@ public:
   Cpu cpu;
   Ppu ppu;
   rom_controller *rom = nullptr;
+  Vga *vga = nullptr;
 
   Bus();
   ~Bus();
@@ -27,4 +29,5 @@ public:
   void write(uint8_t data, uint16_t address);
   uint8_t read(uint16_t address);
   void clock();
+  void clock(uint8_t cycles);
 };

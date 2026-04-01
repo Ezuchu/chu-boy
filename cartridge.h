@@ -20,7 +20,7 @@ class Cartridge {
 
 public:
   Cartridge(std::string rom_name);
-  ~Cartridge() {};
+  ~Cartridge() { delete[] rom_data; };
 
   void output_rom_data();
   uint8_t *return_rom_data();

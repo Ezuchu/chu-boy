@@ -8,9 +8,9 @@ class No_mbc_controller : public rom_controller {
   uint8_t *data;
 
 public:
-  No_mbc_controller() {};
-  ~No_mbc_controller() {};
+  No_mbc_controller();
+  ~No_mbc_controller();
 
-  void load_cartridge(Cartridge *cart);
-  uint8_t read(uint16_t address);
+  void load_cartridge(Cartridge *cart) override;
+  uint8_t read(uint16_t address) override;
 };

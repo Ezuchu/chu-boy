@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vga.h"
 #include <cstdint>
 
 class Bus;
@@ -29,12 +30,19 @@ class Ppu {
   uint8_t *WY;
   uint8_t *WX;
 
+  uint8_t lx = 0;
+  int16_t cycle_counter = 0;
+  int8_t act_cycles = 0;
+
   uint16_t oam_index = 0xFE00;
   uint8_t obj_index = 0;
 
   object_type *objects[10];
 
   Bus *bus = nullptr;
+  Vga *vga = nullptr;
+
+  void sort_objects_by_x();
 
   void oamSearch();
   void pixelTransfer();
@@ -46,6 +54,7 @@ public:
   ~Ppu();
 
   void connectBus(Bus *bus);
+  void connectVga(Vga *vga);
 
-  void step();
+  void step(uint8_t cycles);
 };

@@ -4,7 +4,7 @@
 class Cpu;
 
 enum reg_code {
-  None,
+  None = 20,
   regA = 7,
   regF,
   regB = 0,

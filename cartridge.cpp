@@ -1,10 +1,15 @@
 #include "cartridge.h"
 
 Cartridge::Cartridge(std::string rom_name) {
-
+  this->rom_data = nullptr;
   std::ifstream rom_file;
 
   rom_file.open(rom_name, std::ifstream::binary);
+
+  if (!rom_file.is_open()) {
+    std::cerr << "Failed to open rom: " << rom_name << std::endl;
+    return;
+  }
 
   rom_file.seekg(0x134);
   rom_file.read(this->game_title, 16);
@@ -16,6 +21,8 @@ Cartridge::Cartridge(std::string rom_name) {
   rom_file.get(reinterpret_cast<char &>(this->ram_size));
 
   rom_file.seekg(0x0);
+
+  this->rom_data = new uint8_t[0x8000 * (1 << this->rom_size)];
 
   rom_file.read(reinterpret_cast<char *>(rom_data),
                 0x8000 * (1 << this->rom_size));

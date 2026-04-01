@@ -2,10 +2,9 @@
 #include "memory.h"
 #include <cstdint>
 
-Bus::Bus() : ram(0x4000), Vram(0x4000), Oam(0x0100), io(0x0080), hram(0x0080) {
-  this->cpu.connectBus(this);
-  this->ppu.connectBus(this);
-}
+Bus::Bus() : ram(0x4000), Vram(0x4000), Oam(0x0100), io(0x0080), hram(0x0080) {}
+
+Bus::~Bus() {}
 
 void Bus::write(uint8_t data, uint16_t address) {
   if (address >= 0x0000 && address <= 0x7FFF) {
@@ -29,7 +28,11 @@ void Bus::write(uint8_t data, uint16_t address) {
 }
 
 uint8_t Bus::read(uint16_t address) {
-  if (address >= 0x0000 && address <= 0x7FFF) {
+
+  if (address <= 0x7FFF) {
+    if (this->rom == nullptr) {
+      return 0xFF; // Default value if no ROM is loaded
+    }
     return this->rom->read(address);
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
@@ -51,4 +54,9 @@ uint8_t Bus::read(uint16_t address) {
   return 0x00;
 }
 
-void Bus::clock() { this->cpu.step(); }
+void Bus::clock() {
+  this->cpu.step();
+  this->ppu.step(4);
+}
+
+void Bus::clock(uint8_t cycles) { this->ppu.step(cycles * 4); }

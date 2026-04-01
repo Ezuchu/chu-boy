@@ -4,7 +4,7 @@
 #include <cstdint>
 
 Cpu::Cpu() {
-  pc = 0x100;
+  pc = 0x0100;
 
   op_table[0x00] = {&Cpu::NOP, &Cpu::NONE, None, None, No_cond};
   op_table[0x01] = {&Cpu::LD, &Cpu::AM_RR_NN, regBC, None, No_cond};
@@ -268,10 +268,18 @@ Cpu::Cpu() {
   op_table[0xFF] = {&Cpu::RST, &Cpu::NONE, None, None, No_cond};
 };
 
+void Cpu::exec_cycle(uint8_t cycles) { this->bus->clock(cycles); }
+
+Cpu::~Cpu() {}
+
 void Cpu::connectBus(Bus *bus) { Cpu::bus = bus; }
 
 void Cpu::fetch_instruction() {
-  Cpu::opcode = Cpu::read(Cpu::pc++);
+
+  this->opcode = this->read(Cpu::pc++);
+  if (this->pc == 574) {
+    std::cout << "hola1";
+  }
   this->act_instruction = &op_table[opcode];
 }
 void Cpu::execute_mode() { (this->*act_instruction->mode)(); }
@@ -326,29 +334,48 @@ uint16_t Cpu::get_reg(reg_code type) {
 void Cpu::set_reg(reg_code type, uint16_t data) {
   switch (type) {
   case regA:
-    af.Reg8.higher = data;
+    af.Reg8.higher = data & 0x00FF;
     break;
   case regF:
-    af.Reg8.lower = data;
+    af.Reg8.lower = data & 0x00FF;
     break;
   case regB:
-    bc.Reg8.higher = data;
+    bc.Reg8.higher = data & 0x00FF;
     break;
   case regC:
-    bc.Reg8.lower = data;
+    bc.Reg8.lower = data & 0x00FF;
     break;
   case regD:
-    de.Reg8.higher = data;
+    de.Reg8.higher = data & 0x00FF;
     break;
   case regE:
-    de.Reg8.lower = data;
+    de.Reg8.lower = data & 0x00FF;
     break;
   case regH:
-    hl.Reg8.higher = data;
+    hl.Reg8.higher = data & 0x00FF;
     break;
   case regL:
-    hl.Reg8.lower = data;
+    hl.Reg8.lower = data & 0x00FF;
     break;
+  case regAF:
+    af.reg = data;
+    break;
+  case regBC:
+    bc.reg = data;
+    break;
+  case regDE:
+    de.reg = data;
+    break;
+  case regHL:
+    hl.reg = data;
+    break;
+  case regPC:
+    pc = data;
+    break;
+  case regSP:
+    sp = data;
+    break;
+
   default:
     break;
   }
@@ -374,7 +401,8 @@ bool Cpu::eval_cond() {
     return (get_flag(cy));
   case Z_cond:
     return (get_flag(z));
-    break;
+  default:
+    return true;
   }
 }
 
@@ -412,15 +440,17 @@ void Cpu::AM_R_R() {
 }
 
 void Cpu::AM_R_D8() {
-  this->operand1 = get_reg(this->act_instruction->reg1);
-  this->operand2 = read(this->pc + 1);
+  // this->operand1 = get_reg(this->act_instruction->reg1);
   this->exec_cycle(1);
+  this->operand2 = read(this->pc++);
+
   address_type = to_reg;
   bit16 = false;
 }
 
 void Cpu::AM_R_I16() {
   this->operand1 = get_reg(this->act_instruction->reg1);
+  this->exec_cycle(1);
   this->operand2 = read(get_reg(this->act_instruction->reg2));
 
   if (this->act_instruction->reg2 == regHLaddI) {
@@ -430,7 +460,6 @@ void Cpu::AM_R_I16() {
     hl.reg--;
   }
 
-  this->exec_cycle(1);
   address_type = to_reg;
   bit16 = false;
 }
@@ -441,12 +470,12 @@ void Cpu::AM_I16_R() {
 
   this->address = get_reg(this->act_instruction->reg1);
 
-  /*if (this->act_instruction->reg1 == regHLaddI) {
+  if (this->act_instruction->reg1 == regHLaddI) {
     hl.reg++;
   }
   if (this->act_instruction->reg1 == regHLaddD) {
     hl.reg--;
-  }*/
+  }
 
   // this->exec_cycle(1);
   address_type = to_memory;
@@ -568,7 +597,7 @@ void Cpu::AM_SP_S8() {
 void Cpu::AM_HL_SP_S8() {
   exec_cycle(1);
   int8_t s8 = read(pc++);
-  uint32_t result = sp + s8;
+  uint32_t result = sp + (int8_t)s8;
 
   if (result > UINT16_MAX && get_flag(cy) == 0)
     change_flag(cy);
@@ -702,11 +731,17 @@ void Cpu::ADD() {
 
     set_reg(act_instruction->reg1, result);
   } else {
-    uint16_t low_result =
-        (get_reg(act_instruction->reg1) & 0x00FF) + (operand2 & 0x00FF);
+    uint16_t low_result;
+    uint16_t high_result;
 
-    uint16_t high_result =
-        (get_reg(act_instruction->reg1) >> 8) + (operand2 >> 8);
+    if (opcode == 0xE8) {
+      low_result = (sp & 0x00FF) + ((int8_t)operand2);
+      high_result = (sp >> 8);
+    } else {
+      low_result =
+          (get_reg(act_instruction->reg1) & 0x00FF) + (operand2 & 0x00FF);
+      high_result = (get_reg(act_instruction->reg1) >> 8) + (operand2 >> 8);
+    }
 
     if (low_result > 0xFF)
       set_flag(cy);
@@ -1054,12 +1089,12 @@ void Cpu::JP() {
 // jump to relative address
 void Cpu::JR() {
 
-  exec_cycle(1);
-  int8_t s8 = read(pc++);
+  // exec_cycle(1);
+  int8_t s8 = (int8_t)(0x00FF & operand2);
 
   if (eval_cond()) {
     exec_cycle(1);
-    pc += s8;
+    pc += (int8_t)s8;
   }
 }
 
