@@ -26,8 +26,9 @@ int main(int argc, char **argv) {
 
   SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
 
-  SDL_Texture *texture = SDL_CreateTexture(
-      renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+  SDL_Texture *texture =
+      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+                        SDL_TEXTUREACCESS_STREAMING, 160, 144);
 
   Cartridge *cart = new Cartridge(argv[1]);
 

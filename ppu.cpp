@@ -39,31 +39,28 @@ void Ppu::pixelTransfer() {
   this->state = Pixeltransfer;
   *LCDC = (*LCDC & 0xFB) | 0x03;
 
-  uint8_t bg_x = ((*SCX / 8) + lx) & 0x1F;
-  uint8_t bg_y = (*SCY + *LY) & 255;
+  uint8_t bg_x = ((*SCX + lx) & 255) / 8;
+  uint8_t bg_y = ((*SCY + *LY) & 255) / 8;
 
   uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
   uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
 
-  uint8_t bg_pixel_index = bus->read(background_area + (32 * bg_y) + bg_x);
+  uint8_t bg_pixel_index =
+      bus->read(background_area + (32 * (bg_y % 32)) + (bg_x % 32));
 
   uint16_t tile_data_address;
   if (tile_data_area == 0x8000) {
-    tile_data_address = tile_data_area + (bg_pixel_index);
+    tile_data_address = tile_data_area + (16 * bg_pixel_index);
   } else {
-    tile_data_address = 0x9000 + (int8_t)bg_pixel_index;
+    tile_data_address = 0x9000 + (int16_t)(16 * bg_pixel_index);
   }
-  uint8_t bg_pixel_low = bus->read(tile_data_address + 2 * (bg_x % 8));
-  uint8_t bg_pixel_high = bus->read(tile_data_address + 2 * (bg_x % 8) + 0x01);
 
-  uint8_t bg_pixel = ((bg_pixel_high >> (7 - (lx % 8))) & 0x01) << 1 |
-                     ((bg_pixel_low >> (7 - (lx % 8))) & 0x01);
+  uint8_t bg_pixel_low = bus->read(tile_data_address + 2 * ((*SCY + *LY) % 8));
+  uint8_t bg_pixel_high =
+      bus->read(tile_data_address + 2 * ((*SCY + *LY) % 8) + 0x0001);
 
-  if (bg_pixel_high != 0) {
-    bg_pixel_low = ((bg_pixel_low >> (7 - (lx % 8))) & 0x01);
-    bg_pixel_high = ((bg_pixel_high >> (7 - (lx % 8))) & 0x01);
-    // bg_pixel = (bg_pixel_high << 1) | bg_pixel_low;
-  }
+  uint8_t bg_pixel = ((bg_pixel_high >> (7 - ((*SCX + lx) % 8))) & 0x01) << 1 |
+                     ((bg_pixel_low >> (7 - ((*SCX + lx) % 8))) & 0x01);
 
   this->vga->push_pixel(bg_pixel, lx, *LY);
 }
@@ -125,7 +122,7 @@ void Ppu::step(uint8_t cycles) {
             if (cycle_counter >= 456) {
               oam_index = 0;
               *LY = *LY + 1;
-              cycle_counter = 0;
+              cycle_counter -= 456;
               lx = 0;
             }
           }
@@ -137,10 +134,10 @@ void Ppu::step(uint8_t cycles) {
           cycle_counter += 4;
           if (cycle_counter >= 456) {
             *LY = *LY + 1;
-            cycle_counter = 0;
-            vga->render();
-            if (*LY <= 154) {
+            cycle_counter -= 456;
+            if (*LY >= 154) {
               *LY = 0;
+              vga->render();
             }
           }
         }

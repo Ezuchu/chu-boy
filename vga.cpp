@@ -8,7 +8,7 @@ Vga::Vga() { clear_buffer(); }
 Vga::~Vga() {}
 
 void Vga::push_pixel(uint8_t pixel, uint8_t x, uint8_t y) {
-  uint32_t colors[] = {0x00e0f8d0, 0x0088c070, 0x00346856, 0x000f380f};
+  uint32_t colors[] = {0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000};
   buffer[(y * 160) + x] = colors[pixel];
 }
 
@@ -25,6 +25,8 @@ void Vga::render() {
   SDL_RenderClear(renderer);
   SDL_RenderTexture(renderer, texture, nullptr, nullptr);
   SDL_RenderPresent(renderer);
+
+  clear_buffer();
 
   SDL_Delay(16);
 }
