@@ -20,6 +20,7 @@ Bus::Bus() : ram(0x4000), Vram(0x4000), Oam(0x0100), io(0x0080), hram(0x0080) {
 Bus::~Bus() {}
 
 void Bus::write(uint8_t data, uint16_t address) {
+  static bool read_only = false;
   if (address >= 0x0000 && address <= 0x7FFF) {
     return;
   }
@@ -33,7 +34,14 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->Oam.write(data, address - 0xFE00);
   }
   if (address >= 0xFF00 && address <= 0xFF7F) {
-    this->io.write(data, address - 0xFF00);
+    if (address == 0xFF00) {
+      if (!read_only) {
+        this->io.write(data, address - 0xFF00);
+        read_only = true;
+      }
+    } else {
+      this->io.write(data, address - 0xFF00);
+    }
   }
   if (address >= 0xFF80 && address <= 0xFFFF) {
     this->hram.write(data, address - 0xFF80);
@@ -58,9 +66,9 @@ uint8_t Bus::read(uint16_t address) {
     return this->Oam.read(address - 0xFE00);
   }
   if (address >= 0xFF00 && address <= 0xFF7F) {
-    if (address == 0xFF44) {
+    /*if (address == 0xFF44) {
       return 0x90;
-    }
+    }*/
     return this->io.read(address - 0xFF00);
   }
   if (address >= 0xFF80 && address <= 0xFFFF) {

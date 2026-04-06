@@ -64,8 +64,8 @@ Cpu::Cpu() {
   op_table[0x31] = {&Cpu::LD, &Cpu::AM_RR_NN, regSP, None, No_cond};
   op_table[0x32] = {&Cpu::LD, &Cpu::AM_I16_R, regHLaddD, regA, No_cond};
   op_table[0x33] = {&Cpu::INC, &Cpu::AM_RR, regSP, None, No_cond};
-  op_table[0x34] = {&Cpu::INC, &Cpu::AM_I16, regHL, None, No_cond};
-  op_table[0x35] = {&Cpu::DEC, &Cpu::AM_I16, regHL, None, No_cond};
+  op_table[0x34] = {&Cpu::INC, &Cpu::AM_I16, regHLadd, None, No_cond};
+  op_table[0x35] = {&Cpu::DEC, &Cpu::AM_I16, regHLadd, None, No_cond};
   op_table[0x36] = {&Cpu::LD, &Cpu::AM_I16_D8, regHL, None, No_cond};
   op_table[0x37] = {&Cpu::SCF, &Cpu::NONE, None, None, No_cond};
   op_table[0x38] = {&Cpu::JR, &Cpu::AM_R_D8, None, None, C_cond};
@@ -271,10 +271,7 @@ Cpu::Cpu() {
   op_table[0xFF] = {&Cpu::RST, &Cpu::NONE, None, None, No_cond};
 };
 
-void Cpu::exec_cycle(uint8_t cycles) {
-  // print_state();
-  this->bus->clock(cycles);
-}
+void Cpu::exec_cycle(uint8_t cycles) { this->bus->clock(cycles); }
 
 Cpu::~Cpu() {}
 
@@ -450,7 +447,7 @@ void Cpu::step() {
     handle_interrupt();
   } else {
     if (!is_halted) {
-      print_state();
+      // print_state();
       fetch_instruction();
       execute_mode();
       execute_instruction();
@@ -763,19 +760,12 @@ void Cpu::POP() {
   exec_cycle(1);
   uint8_t higher_byte = read(sp++);
   set_reg(act_instruction->reg1, (higher_byte << 8) | lower_byte);
-  /*if (opcode == 0xf1) {
-    print_state();
-    int i = 0;
-  }*/
   if (act_instruction->reg1 == regAF)
     af.Reg8.lower &= 0xF0;
 }
 
 // Add to register
 void Cpu::ADD() {
-  /*if (opcode == 0xE8 && operand2 == 0xFF) {
-    print_state();
-  }*/
 
   if (!bit16) {
     uint16_t result = get_reg(act_instruction->reg1) + operand2;
@@ -850,9 +840,6 @@ void Cpu::ADD() {
             ((high_result << 8) & 0xFF00) | (low_result & 0x00FF));
   }
   clear_flag(n);
-  /*if (opcode == 0xE8 && operand2 == 0xFF) {
-    print_state();
-  }*/
 }
 
 // Add with carry to register A
@@ -1002,7 +989,7 @@ void Cpu::INC() {
   if (!bit16) {
     uint8_t result = this->operand1 + 1;
 
-    uint8_t hy_op = (get_reg(act_instruction->reg1) & 0x0F) + (0x01);
+    uint8_t hy_op = (this->operand1 & 0x0F) + (0x01);
     if (hy_op > 0x0F)
       set_flag(h);
     else
@@ -1060,18 +1047,19 @@ void Cpu::DEC() {
 }
 
 void Cpu::DAA() {
-  uint16_t result = af.Reg8.higher;
-  if ((result & 0x0F) > 0x09) {
-    result += 0x06;
-    if (result > (uint8_t)0xFF)
-      set_flag(cy);
-    else
-      clear_flag(cy);
+  uint8_t adj = 0x00;
+  uint16_t aReg = af.Reg8.higher;
+  if ((!get_flag(n) && ((aReg & 0x0F) > 0x09)) || get_flag(h)) {
+    adj += 0x06;
   }
-  if ((result & 0xF0) > 0x90) {
-    result += 0x60;
+  if ((!get_flag(n) && ((aReg & 0xFF) > 0x99)) || get_flag(cy)) {
+    adj += 0x60;
     set_flag(cy);
+  } else {
+    clear_flag(cy);
   }
+  uint16_t result = !get_flag(n) ? aReg + adj : aReg - adj;
+
   if ((result & 0x00FF) == 0)
     set_flag(z);
   else
@@ -1143,7 +1131,7 @@ void Cpu::RRCA() {
     clear_flag(cy);
 
   af.Reg8.higher >>= 1;
-  af.Reg8.higher |= (7 << get_flag(cy));
+  af.Reg8.higher |= (get_flag(cy) << 7);
 
   clear_flag(z);
   clear_flag(n);
@@ -1262,12 +1250,12 @@ void Cpu::RLC() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
-    operand = get_reg(reg);
+    operand = get_reg(reg) & 0xff;
   }
 
-  if ((operand & 0x01) == 0x01)
+  if ((operand & 0x80) == 0x80)
     set_flag(cy);
   else
     clear_flag(cy);
@@ -1275,7 +1263,11 @@ void Cpu::RLC() {
   operand <<= 1;
   operand |= get_flag(cy);
 
-  clear_flag(z);
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
   clear_flag(n);
   clear_flag(h);
 
@@ -1293,12 +1285,12 @@ void Cpu::RRC() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
-    operand = get_reg(reg);
+    operand = get_reg(reg) & 0xff;
   }
 
-  if ((operand & 0x80) == 0x80)
+  if ((operand & 0x01) == 0x01)
     set_flag(cy);
   else
     clear_flag(cy);
@@ -1306,7 +1298,11 @@ void Cpu::RRC() {
   operand >>= 1;
   operand |= (get_flag(cy) << 7);
 
-  clear_flag(z);
+  if (operand == 0)
+    set_flag(z);
+  else
+    clear_flag(z);
+
   clear_flag(n);
   clear_flag(h);
 
@@ -1324,9 +1320,9 @@ void Cpu::RL() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
-    operand = get_reg(reg);
+    operand = get_reg(reg) & 0xff;
   }
 
   uint8_t previus_carry = get_flag(cy);
@@ -1361,9 +1357,9 @@ void Cpu::RR() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
-    operand = get_reg(reg);
+    operand = get_reg(reg) & 0xff;
   }
 
   uint8_t previus_carry = get_flag(cy);
@@ -1398,9 +1394,9 @@ void Cpu::SLA() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
-    operand = get_reg(reg);
+    operand = get_reg(reg) & 0xff;
   }
 
   if ((operand & 0x80) == 0x80)
@@ -1433,9 +1429,9 @@ void Cpu::SRA() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
-    operand = get_reg(reg);
+    operand = get_reg(reg) & 0xff;
   }
 
   if ((operand & 0x01) == 0x01)
@@ -1466,7 +1462,7 @@ void Cpu::SWAP() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
     operand = get_reg(reg);
   }
@@ -1496,7 +1492,7 @@ void Cpu::SRL() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
     operand = get_reg(reg);
   }
@@ -1530,13 +1526,13 @@ void Cpu::BIT() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
     operand = get_reg(reg);
   }
 
-  uint8_t bit = (opcode & 0x28);
-  uint8_t result = operand & (1 << bit);
+  uint8_t bit = (opcode & 0x38) >> 3;
+  uint8_t result = (operand & (1 << bit)) >> bit;
 
   if (result == 0) {
     set_flag(z);
@@ -1554,12 +1550,12 @@ void Cpu::RES() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
     operand = get_reg(reg);
   }
 
-  uint8_t bit = (opcode & 0x28);
+  uint8_t bit = (opcode & 0x38) >> 3;
   operand &= ~(1 << bit);
 
   if (reg == regHLadd) {
@@ -1576,13 +1572,13 @@ void Cpu::SET() {
   uint8_t operand;
   if (reg == regHLadd) {
     exec_cycle(1);
-    operand = read(pc++);
+    operand = read(hl.reg);
   } else {
     operand = get_reg(reg);
   }
 
-  uint8_t bit = (opcode & 0x28);
-  operand &= (1 << bit);
+  uint8_t bit = (opcode & 0x38) >> 3;
+  operand |= (1 << bit);
 
   if (reg == regHLadd) {
     exec_cycle(1);
