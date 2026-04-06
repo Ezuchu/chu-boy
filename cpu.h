@@ -10,10 +10,13 @@
 #define reg16 uint16_t
 #define reg8 uint8_t
 
+#include <cstdio>
+
 class Bus;
 
 class Cpu {
 private:
+  static FILE *log_file;
   union Register {
     reg16 reg;
 
@@ -25,7 +28,7 @@ private:
   enum flags { z = (0x80), n = (0x40), h = (0x20), cy = (0x10) };
   enum add_type { to_reg, to_memory };
 
-  Register af = {0x0100}, bc = {0x0000}, de = {0x0000}, hl = {0x0000};
+  Register af = {0x01B0}, bc = {0x0013}, de = {0x00D8}, hl = {0x014D};
   reg16 sp = 0xFFFE;
   reg16 pc = 0x0100;
 
@@ -43,6 +46,8 @@ private:
 
   bool is_halted = false;
   bool IME = false;
+  uint8_t *IE = nullptr;
+  uint8_t *IF = nullptr;
 
   Bus *bus = nullptr;
 
@@ -68,6 +73,8 @@ private:
   void set_flag(flags flag);
 
   void exec_cycle(uint8_t num_cycles);
+  void handle_interrupt();
+  void push_to_interrupt(uint16_t address);
 
   bool eval_cond();
 
@@ -153,4 +160,5 @@ public:
 
   void connectBus(Bus *bus);
   void step();
+  void print_state();
 };

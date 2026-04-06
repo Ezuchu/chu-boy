@@ -30,6 +30,9 @@ class Ppu {
   uint8_t *WY;
   uint8_t *WX;
 
+  uint8_t *IF;
+  uint8_t *IE;
+
   uint8_t lx = 0;
   int16_t cycle_counter = 0;
   int8_t act_cycles = 0;

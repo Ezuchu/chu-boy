@@ -2,6 +2,9 @@
 #include "bus.h"
 #include "instruction.h"
 #include <cstdint>
+#include <cstdio>
+
+FILE *Cpu::log_file = nullptr;
 
 Cpu::Cpu() {
   pc = 0x0100;
@@ -268,18 +271,23 @@ Cpu::Cpu() {
   op_table[0xFF] = {&Cpu::RST, &Cpu::NONE, None, None, No_cond};
 };
 
-void Cpu::exec_cycle(uint8_t cycles) { this->bus->clock(cycles); }
+void Cpu::exec_cycle(uint8_t cycles) {
+  // print_state();
+  this->bus->clock(cycles);
+}
 
 Cpu::~Cpu() {}
 
-void Cpu::connectBus(Bus *bus) { Cpu::bus = bus; }
+void Cpu::connectBus(Bus *bus) {
+  Cpu::bus = bus;
+  IE = bus->get_address(0xFFFF);
+  IF = bus->get_address(0xFF0F);
+}
 
 void Cpu::fetch_instruction() {
 
   this->opcode = this->read(Cpu::pc++);
-  if (this->pc == 574) {
-    std::cout << "hola1";
-  }
+
   this->act_instruction = &op_table[opcode];
 }
 void Cpu::execute_mode() { (this->*act_instruction->mode)(); }
@@ -406,11 +414,47 @@ bool Cpu::eval_cond() {
   }
 }
 
+void Cpu::handle_interrupt() {
+
+  uint8_t interrupt_enable = *IE;
+  uint8_t interrupt_flag = *IF;
+  uint8_t i = 0;
+
+  for (i = 0; i < 5; i++) {
+    interrupt_flag = (*IF >> i) & 0x01;
+    interrupt_enable = (*IE >> i) & 0x01;
+    if ((interrupt_flag & interrupt_enable) == 0x01) {
+      IME = false;
+      is_halted = false;
+      *IF &= ~(1 << i);
+      break;
+    }
+  }
+  if (!IME) {
+    exec_cycle(2);
+    push_to_interrupt(0x0040 + (i * 8));
+  }
+}
+
+void Cpu::push_to_interrupt(uint16_t address) {
+  sp--;
+  write((uint8_t)(pc >> 8), sp--);
+  exec_cycle(1);
+  write((uint8_t)(pc & 0x00FF), sp);
+  exec_cycle(1);
+  pc = address;
+}
+
 void Cpu::step() {
-  if (!is_halted) {
-    fetch_instruction();
-    execute_mode();
-    execute_instruction();
+  if (IME && (*IE & *IF) != 0) {
+    handle_interrupt();
+  } else {
+    if (!is_halted) {
+      print_state();
+      fetch_instruction();
+      execute_mode();
+      execute_instruction();
+    }
   }
 }
 
@@ -596,16 +640,24 @@ void Cpu::AM_SP_S8() {
 
 void Cpu::AM_HL_SP_S8() {
   exec_cycle(1);
-  int8_t s8 = read(pc++);
-  uint32_t result = sp + (int8_t)s8;
+  int8_t s8 = (int8_t)read(pc++);
+  uint16_t low_result = sp + s8;
+  uint16_t high_result = (low_result >> 8);
+  uint8_t hy_op = (sp & 0x000F) + ((int8_t)(s8 & 0x000F));
 
-  if (result > UINT16_MAX && get_flag(cy) == 0)
-    change_flag(cy);
+  if ((low_result & 0x00FF) < (sp & 0x00FF))
+    set_flag(cy);
+  else
+    clear_flag(cy);
+  if (hy_op > 0x0F)
+    set_flag(h);
+  else
+    clear_flag(h);
 
-  uint16_t format_result = (uint16_t)result;
+  uint16_t format_result = (high_result << 8) | (low_result & 0x00FF);
 
-  if ((sp & 0x0F) + (s8 & 0x0F) > 0x0F && get_flag(h) == 0)
-    change_flag(h);
+  clear_flag(z);
+  clear_flag(n);
 
   this->operand2 = format_result;
   exec_cycle(1);
@@ -674,6 +726,7 @@ void Cpu::CB() {
 
 // Loads data to a register or address in memory
 void Cpu::LD() {
+
   uint16_t data = operand2;
 
   if (address_type == to_reg) {
@@ -684,7 +737,7 @@ void Cpu::LD() {
       write((uint8_t)data, address);
     } else {
       exec_cycle(1);
-      write((uint8_t)(data & 0x00FF), address);
+      write((uint8_t)(data & 0xFF), address);
       exec_cycle(1);
       write((uint8_t)(data >> 8), address + 1);
     }
@@ -696,35 +749,48 @@ void Cpu::PUSH() {
   exec_cycle(1);
   sp--;
   exec_cycle(1);
-  write((uint8_t)(operand1 & 0x00FF), sp);
+  write((uint8_t)(operand1 >> 8), sp);
   sp--;
   exec_cycle(1);
-  write((uint8_t)(operand1 >> 8), sp);
+  write((uint8_t)(operand1 & 0x00FF), sp);
 }
 
 // Pop from stack
 void Cpu::POP() {
+
   exec_cycle(1);
   uint8_t lower_byte = read(sp++);
   exec_cycle(1);
   uint8_t higher_byte = read(sp++);
   set_reg(act_instruction->reg1, (higher_byte << 8) | lower_byte);
+  /*if (opcode == 0xf1) {
+    print_state();
+    int i = 0;
+  }*/
+  if (act_instruction->reg1 == regAF)
+    af.Reg8.lower &= 0xF0;
 }
 
 // Add to register
 void Cpu::ADD() {
+  /*if (opcode == 0xE8 && operand2 == 0xFF) {
+    print_state();
+  }*/
+
   if (!bit16) {
     uint16_t result = get_reg(act_instruction->reg1) + operand2;
     if (result > 0xFF)
       set_flag(cy);
     else
       clear_flag(cy);
-    if ((get_reg(act_instruction->reg1) & 0x0F) + (operand2 & 0x0F) > 0x0F)
+    uint8_t hy_op = (get_reg(act_instruction->reg1) & 0x000F) +
+                    (uint8_t)(operand2 & 0x000F);
+    if (hy_op > 0x0F)
       set_flag(h);
     else
       clear_flag(h);
 
-    if (result == 0)
+    if ((result & 0x00FF) == 0)
       set_flag(z);
     else
       clear_flag(z);
@@ -734,57 +800,78 @@ void Cpu::ADD() {
     uint16_t low_result;
     uint16_t high_result;
 
+    uint8_t hy_op_low;
+    uint8_t hy_op_hig;
+
     if (opcode == 0xE8) {
-      low_result = (sp & 0x00FF) + ((int8_t)operand2);
-      high_result = (sp >> 8);
+      int8_t s8 = (operand2 & 0x00FF);
+      low_result = sp + (int8_t)s8;
+      high_result = low_result >> 8;
+      hy_op_low = (sp & 0x000F) + ((int8_t)(s8 & 0x000F));
+
     } else {
       low_result =
           (get_reg(act_instruction->reg1) & 0x00FF) + (operand2 & 0x00FF);
       high_result = (get_reg(act_instruction->reg1) >> 8) + (operand2 >> 8);
+      hy_op_low = (get_reg(act_instruction->reg1) & 0x000F) +
+                  (uint8_t)(operand2 & 0x000F);
+      hy_op_hig = ((get_reg(act_instruction->reg1) >> 8) & 0x000F) +
+                  ((operand2 >> 8) & 0x000F);
     }
 
-    if (low_result > 0xFF)
+    if ((get_reg(act_instruction->reg1) & 0x00FF) > (low_result & 0x00FF))
       set_flag(cy);
     else
       clear_flag(cy);
 
-    if (low_result & 0x0F)
+    if (hy_op_low > 0x0F)
       set_flag(h);
     else
       clear_flag(h);
 
     exec_cycle(1);
 
-    high_result += get_flag(cy);
-    if (high_result > 0xFF)
-      set_flag(cy);
-    else
-      clear_flag(cy);
-    if (high_result & 0x0F)
-      set_flag(h);
-    else
-      clear_flag(h);
+    if (opcode != 0xE8) {
+      high_result += get_flag(cy);
+      hy_op_hig += get_flag(cy);
+      if (high_result > 0xFF)
+        set_flag(cy);
+      else
+        clear_flag(cy);
+      if (hy_op_hig > 0x0F)
+        set_flag(h);
+      else
+        clear_flag(h);
+    } else {
+      clear_flag(z);
+    }
 
-    clear_flag(z);
-
-    set_reg(act_instruction->reg1, (high_result << 8) | low_result);
+    set_reg(act_instruction->reg1,
+            ((high_result << 8) & 0xFF00) | (low_result & 0x00FF));
   }
   clear_flag(n);
+  /*if (opcode == 0xE8 && operand2 == 0xFF) {
+    print_state();
+  }*/
 }
 
 // Add with carry to register A
 void Cpu::ADC() {
+
   uint16_t result = af.Reg8.higher + operand2 + get_flag(cy);
+  uint8_t hy_op =
+      (af.Reg8.higher & 0x000F) + (operand2 & 0x000F) + get_flag(cy);
   if (result > 0xFF)
     set_flag(cy);
   else
     clear_flag(cy);
-  if ((get_reg(act_instruction->reg1) & 0x0F) + (operand2 & 0x0F) > 0x0F)
+
+  if (hy_op > 0x0F)
     set_flag(h);
   else
     clear_flag(h);
 
-  if (result == 0)
+  if ((result & 0x00FF) == 0)
     set_flag(z);
   else
     clear_flag(z);
@@ -801,12 +888,14 @@ void Cpu::SUB() {
     set_flag(cy);
   else
     clear_flag(cy);
-  if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+  uint8_t hy_op =
+      (get_reg(act_instruction->reg1) & 0x000F) - (operand2 & 0x000F);
+  if (hy_op > 0x0F)
     set_flag(h);
   else
     clear_flag(h);
 
-  if (result == 0)
+  if ((result & 0x00FF) == 0)
     set_flag(z);
   else
     clear_flag(z);
@@ -819,16 +908,19 @@ void Cpu::SUB() {
 // Substracts from A register with carry
 void Cpu::SBC() {
   uint16_t result = af.Reg8.higher - operand2 - get_flag(cy);
+  uint8_t hy_op = (get_reg(act_instruction->reg1) & 0x000F) -
+                  (operand2 & 0x000F) - get_flag(cy);
   if (result > 0xFF)
     set_flag(cy);
   else
     clear_flag(cy);
-  if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+
+  if (hy_op > 0x0F)
     set_flag(h);
   else
     clear_flag(h);
 
-  if (result == 0)
+  if ((result & 0x00FF) == 0)
     set_flag(z);
   else
     clear_flag(z);
@@ -882,16 +974,20 @@ void Cpu::XOR() {
 
 // Compares a operand with the A register
 void Cpu::CP() {
-  uint16_t result = af.Reg8.higher - operand2;
+  uint16_t result = af.Reg8.higher - (uint8_t)(operand2 & 0x00FF);
 
   if (result > 0xFF)
     set_flag(cy);
   else
     clear_flag(cy);
-  if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+
+  uint8_t hy_op = (af.Reg8.higher & 0x0F) - ((uint8_t)(operand2 & 0x000F));
+  if (hy_op > 0x0F)
     set_flag(h);
   else
     clear_flag(h);
+
+  result &= 0x00FF;
 
   if (result == 0)
     set_flag(z);
@@ -904,9 +1000,10 @@ void Cpu::CP() {
 // Increments by 1
 void Cpu::INC() {
   if (!bit16) {
-    uint16_t result = this->operand1 + 1;
+    uint8_t result = this->operand1 + 1;
 
-    if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+    uint8_t hy_op = (get_reg(act_instruction->reg1) & 0x0F) + (0x01);
+    if (hy_op > 0x0F)
       set_flag(h);
     else
       clear_flag(h);
@@ -934,9 +1031,10 @@ void Cpu::INC() {
 // Decrements by 1
 void Cpu::DEC() {
   if (!bit16) {
-    uint16_t result = this->operand1 - 1;
+    uint8_t result = this->operand1 - 1;
 
-    if ((get_reg(act_instruction->reg1) & 0x0F) - (operand2 & 0x0F) > 0x0F)
+    uint8_t hy_op = (this->operand1 & 0x000F) - (0x01);
+    if (hy_op > 0x0F)
       set_flag(h);
     else
       clear_flag(h);
@@ -949,10 +1047,10 @@ void Cpu::DEC() {
     set_flag(n);
 
     if (address_type == to_reg)
-      set_reg(this->act_instruction->reg1, (uint8_t)(result & 0x00FF));
+      set_reg(this->act_instruction->reg1, result);
     else {
       exec_cycle(1);
-      write((uint8_t)(result & 0x00FF), this->address);
+      write(result, this->address);
     }
 
   } else {
@@ -974,7 +1072,7 @@ void Cpu::DAA() {
     result += 0x60;
     set_flag(cy);
   }
-  if (result == 0)
+  if ((result & 0x00FF) == 0)
     set_flag(z);
   else
     clear_flag(z);
@@ -1061,7 +1159,7 @@ void Cpu::RRA() {
     clear_flag(cy);
 
   af.Reg8.higher >>= 1;
-  af.Reg8.higher |= (7 << previus_carry);
+  af.Reg8.higher |= (previus_carry << 7);
 
   clear_flag(z);
   clear_flag(n);
@@ -1491,5 +1589,21 @@ void Cpu::SET() {
     write(operand, hl.reg);
   } else {
     set_reg(reg, operand);
+  }
+}
+void Cpu::print_state() {
+  if (log_file == nullptr) {
+    log_file = fopen("cpu_log.txt", "w");
+  }
+
+  if (log_file != nullptr) {
+    fprintf(log_file,
+            "A:%02X F:%02X B:%02X C:%02X D:%02X E:%02X H:%02X L:%02X SP:"
+            "%04X PC:%04X PCMEM:%02X,%02X,%02X,%02X\n",
+            af.Reg8.higher, af.Reg8.lower, bc.Reg8.higher, bc.Reg8.lower,
+            de.Reg8.higher, de.Reg8.lower, hl.Reg8.higher, hl.Reg8.lower, sp,
+            pc, this->read(pc), this->read(pc + 1), this->read(pc + 2),
+            this->read(pc + 3));
+    fflush(log_file);
   }
 }
