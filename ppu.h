@@ -39,8 +39,10 @@ class Ppu {
 
   uint16_t oam_index = 0xFE00;
   uint8_t obj_index = 0;
+  uint8_t act_obj_index = 0;
 
   object_type *objects[10];
+  object_type *obj = nullptr;
 
   Bus *bus = nullptr;
   Vga *vga = nullptr;
@@ -48,7 +50,10 @@ class Ppu {
   void sort_objects_by_x();
 
   void oamSearch();
+  void objectTransfer(object_type *obj);
   void pixelTransfer();
+  void windowTransfer();
+  void backgroundTransfer();
   void hBlank();
   void vBlank();
 

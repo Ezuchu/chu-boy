@@ -23,7 +23,7 @@ void Ppu::oamSearch() {
   uint8_t up_limit;
   uint8_t down_limit;
   uint8_t size;
-  if (*LCDC & 0x04) {
+  if ((*LCDC & 0x04) == 0x04) {
     up_limit = 0;
     down_limit = 160;
     size = 16;
@@ -35,7 +35,7 @@ void Ppu::oamSearch() {
 
   object_type *obj = (object_type *)bus->Oam.get_address(oam_index);
   if (obj->y > up_limit && obj->y < down_limit && obj_index < 10) {
-    if (*LY > obj->y && *LY <= obj->y - size) {
+    if (*LY >= obj->y - 16 && *LY < (obj->y - 16 + size)) {
       objects[obj_index] = obj;
       obj_index++;
     }
@@ -49,8 +49,106 @@ void Ppu::pixelTransfer() {
     this->state = Pixeltransfer;
     *LCDC = (*LCDC & 0xFB) | 0x03;
     *STAT = (*STAT & 0xFB) | 0x03;
+    act_obj_index = 0;
+  }
+  obj = nullptr;
+  if ((*LCDC & 0x02) == 0x02) {
+    for (uint8_t i = 0; i < obj_index; i++) {
+      if (objects[i]->x > 0 && objects[i]->x < 160) {
+        if (lx >= objects[i]->x - 8 && objects[i]->x > lx) {
+          if (obj != nullptr) {
+            if (objects[i]->x < obj->x) {
+              obj = objects[i];
+            }
+          } else {
+            obj = objects[i];
+          }
+        }
+      }
+    }
+  }
+  if (obj != nullptr && ((obj->flags & 0x80) != 0x80)) {
+    this->objectTransfer(obj);
+    return;
   }
 
+  // window enable in range?
+  if (*LCDC & 0x20 && lx >= *WX && *LY >= *WY) {
+    Ppu::windowTransfer();
+    return;
+  } else {
+    Ppu::backgroundTransfer();
+    return;
+  }
+}
+
+void Ppu::objectTransfer(object_type *obj) {
+  uint8_t obj_x = (lx - obj->x + 8) % 8;
+  uint8_t obj_y = (*LY - (obj->y - 16)) % ((*LCDC & 0x04) ? 16 : 8);
+  uint16_t obj_tile = obj->tile;
+  uint8_t obj_flags = obj->flags;
+
+  uint8_t x_flip = (obj_flags & 0x20) ? 1 : 0;
+  uint8_t y_flip = (obj_flags & 0x40) ? 1 : 0;
+
+  uint16_t tile_data_address = 0x8000 + (uint16_t)(16 * obj_tile);
+
+  uint8_t row_num =
+      !y_flip ? obj_y
+              : (((*LCDC & 0x04) ? 15 : 7) - obj_y) % ((*LCDC & 0x04) ? 16 : 8);
+
+  uint8_t obj_pixel_low = bus->read(tile_data_address + (2 * row_num));
+  uint8_t obj_pixel_high =
+      bus->read(tile_data_address + (2 * row_num) + 0x0001);
+
+  uint8_t pixel_num = x_flip ? obj_x : 7 - obj_x;
+
+  uint8_t obj_pixel = ((obj_pixel_high >> (pixel_num)) & 0x01) << 1 |
+                      ((obj_pixel_low >> (pixel_num)) & 0x01);
+
+  if ((obj_flags & 0x10) == 0x10) {
+    obj_pixel = (*OBP1 >> (obj_pixel * 2)) & 0x03;
+  } else {
+    obj_pixel = (*OBP0 >> (obj_pixel * 2)) & 0x03;
+  }
+  this->vga->push_pixel(obj_pixel, lx, *LY);
+}
+
+void Ppu::windowTransfer() {
+  uint8_t bg_x = (((lx + 7) - *WX) & 255) / 8;
+  uint8_t bg_y = ((*LY - *WY) & 255) / 8;
+
+  uint16_t window_area = ((*LCDC & 0x40) == 0x40) ? 0x9C00 : 0x9800;
+  uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
+
+  uint8_t bg_pixel_index =
+      bus->read(window_area + (32 * (bg_y % 32)) + (bg_x % 32));
+
+  uint16_t tile_data_address;
+  if (tile_data_area == 0x8000) {
+    tile_data_address = tile_data_area + (uint16_t)(16 * bg_pixel_index);
+  } else {
+    tile_data_address = 0x9000 + (int16_t)(16 * bg_pixel_index);
+  }
+
+  uint8_t bg_pixel_low = bus->read(tile_data_address + 2 * ((*SCY + *LY) % 8));
+  uint8_t bg_pixel_high =
+      bus->read(tile_data_address + 2 * ((*SCY + *LY) % 8) + 0x0001);
+
+  uint8_t bg_pixel = ((bg_pixel_high >> (7 - ((*SCX + lx) % 8))) & 0x01) << 1 |
+                     ((bg_pixel_low >> (7 - ((*SCX + lx) % 8))) & 0x01);
+
+  if (bg_pixel == 0 && obj != nullptr && (obj->flags & 0x80) == 0x80) {
+    this->objectTransfer(obj);
+    return;
+  }
+
+  bg_pixel = (*BGP >> (bg_pixel * 2)) & 0x03;
+
+  this->vga->push_pixel(bg_pixel, lx, *LY);
+}
+
+void Ppu::backgroundTransfer() {
   uint8_t bg_x = ((*SCX + lx) & 255) / 8;
   uint8_t bg_y = ((*SCY + *LY) & 255) / 8;
 
@@ -74,6 +172,11 @@ void Ppu::pixelTransfer() {
   uint8_t bg_pixel = ((bg_pixel_high >> (7 - ((*SCX + lx) % 8))) & 0x01) << 1 |
                      ((bg_pixel_low >> (7 - ((*SCX + lx) % 8))) & 0x01);
 
+  if (bg_pixel == 0 && obj != nullptr && (obj->flags & 0x80) == 0x80) {
+    this->objectTransfer(obj);
+    return;
+  }
+
   bg_pixel = (*BGP >> (bg_pixel * 2)) & 0x03;
 
   this->vga->push_pixel(bg_pixel, lx, *LY);
@@ -84,6 +187,7 @@ void Ppu::hBlank() {
     this->state = HBlank;
     *LCDC = (*LCDC & 0xFB) | 0x00;
     *STAT = (*STAT & 0xFB) | 0x00;
+    this->obj_index = 0;
     //*STAT = (*STAT & 0xA4) | 0x08;
 
     // request interrupt

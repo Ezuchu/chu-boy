@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cpu.h"
+#include "dma.h"
 #include "mbc.h"
 #include "memory.h"
 #include "ppu.h"
@@ -23,6 +24,7 @@ public:
   Ppu ppu;
   rom_controller *rom = nullptr;
   Vga *vga = nullptr;
+  DMA dma;
 
   uint8_t *tima = nullptr;
   uint8_t *tma = nullptr;
