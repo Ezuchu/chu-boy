@@ -1,10 +1,12 @@
 #include "bus.h"
 #include "cartridge.h"
 #include "cpu.h"
+#include "joyPad.h"
 #include "no_mbc.h"
 #include "vga.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_scancode.h>
 #include <string>
 
 const int window_width = 160;
@@ -36,12 +38,19 @@ int main(int argc, char **argv) {
 
   rom_controller->load_cartridge(cart);
 
+  uint16_t key_config[8] = {SDL_SCANCODE_J, SDL_SCANCODE_K, SDL_SCANCODE_U,
+                            SDL_SCANCODE_I, SDL_SCANCODE_W, SDL_SCANCODE_S,
+                            SDL_SCANCODE_A, SDL_SCANCODE_D};
+
   Bus *bus = new Bus();
+  bus->rom = rom_controller;
   bus->cpu = Cpu();
   bus->cpu.connectBus(bus);
   bus->ppu = Ppu();
   bus->ppu.connectBus(bus);
-  bus->rom = rom_controller;
+
+  JoyPad *joypad = new JoyPad(key_config);
+  joypad->connectBus(bus);
 
   Vga *vga = new Vga();
   bus->vga = vga;
@@ -57,8 +66,10 @@ int main(int argc, char **argv) {
       if (event.type == SDL_EVENT_QUIT) { // Handle the window close button
         quit = true;
       }
+
       // Handle other events here (keyboard, mouse, etc.)
     }
+    joypad->get_state(SDL_GetKeyboardState(NULL));
     bus->clock();
   }
 

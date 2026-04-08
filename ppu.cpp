@@ -11,12 +11,13 @@ void Ppu::sort_objects_by_x() {}
 void Ppu::oamSearch() {
   if (this->state != OAMsearch) {
     this->state = OAMsearch;
-    *LCDC = (*LCDC & 0xFB) | 0x02;
-    *STAT = (*STAT & 0xFB) | 0x02;
-    //*STAT = (*STAT & 0xA4) | 0x20;
+    *LCDC = (*LCDC & 0xFC) | 0x02;
+    *STAT = (*STAT & 0xFC) | 0x02;
 
-    // request interrupt
-    //*IF |= 0x02;
+    if ((*STAT & 0x20) == 0x20) {
+      // request interrupt
+      *IF |= 0x02;
+    }
   }
   this->state = OAMsearch;
   *LCDC = (*LCDC & 0xFB) | 0x02;
@@ -47,8 +48,8 @@ void Ppu::pixelTransfer() {
   // TODO: object pixel_search
   if (this->state != Pixeltransfer) {
     this->state = Pixeltransfer;
-    *LCDC = (*LCDC & 0xFB) | 0x03;
-    *STAT = (*STAT & 0xFB) | 0x03;
+    *LCDC = (*LCDC & 0xFC) | 0x03;
+    *STAT = (*STAT & 0xFC) | 0x03;
     act_obj_index = 0;
   }
   obj = nullptr;
@@ -185,9 +186,14 @@ void Ppu::backgroundTransfer() {
 void Ppu::hBlank() {
   if (this->state != HBlank) {
     this->state = HBlank;
-    *LCDC = (*LCDC & 0xFB) | 0x00;
-    *STAT = (*STAT & 0xFB) | 0x00;
+    *LCDC = (*LCDC & 0xFC) | 0x00;
+    *STAT = (*STAT & 0xFC) | 0x00;
     this->obj_index = 0;
+
+    if ((*STAT & 0x08) == 0x08) {
+      // request interrupt
+      *IF |= 0x02;
+    }
     //*STAT = (*STAT & 0xA4) | 0x08;
 
     // request interrupt
@@ -198,13 +204,18 @@ void Ppu::hBlank() {
 void Ppu::vBlank() {
   if (this->state != VBlank) {
     this->state = VBlank;
-    *LCDC = (*LCDC & 0xFB) | 0x01;
-    *STAT = (*STAT & 0xFB) | 0x01;
+    *LCDC = (*LCDC & 0xFC) | 0x01;
+    *STAT = (*STAT & 0xFC) | 0x01;
+
+    if ((*STAT & 0x10) == 0x10) {
+      // request interrupt
+      *IF |= 0x02;
+    }
+
     // *STAT = (*STAT & 0xA4) | 0x10;
 
     // request interrupt
     *IF |= 0x01;
-    //*IF |= 0x02;
   }
 }
 
@@ -260,6 +271,13 @@ void Ppu::step(uint8_t cycles) {
               *LY = *LY + 1;
               cycle_counter -= 456;
               lx = 0;
+
+              if (*LY == *LYC) {
+                *STAT |= 0x20;
+                if ((*STAT & 0x40) == 0x40) {
+                  *IF |= 0x02;
+                }
+              }
             }
           }
         }
@@ -274,6 +292,12 @@ void Ppu::step(uint8_t cycles) {
             if (*LY >= 154) {
               *LY = 0;
               vga->render();
+            }
+            if (*LY == *LYC) {
+              *STAT |= 0x20;
+              if ((*STAT & 0x40) == 0x40) {
+                *IF |= 0x02;
+              }
             }
           }
         }

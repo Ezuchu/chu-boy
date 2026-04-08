@@ -22,7 +22,6 @@ Bus::Bus()
 Bus::~Bus() {}
 
 void Bus::write(uint8_t data, uint16_t address) {
-  static bool read_only = false;
   if (address >= 0x0000 && address <= 0x7FFF) {
     return;
   }
@@ -37,15 +36,14 @@ void Bus::write(uint8_t data, uint16_t address) {
   }
   if (address >= 0xFF00 && address <= 0xFF7F) {
     if (address == 0xFF00) {
-      if (!read_only) {
-        this->io.write(data, address - 0xFF00);
-        read_only = true;
-      }
-    } else {
-      this->io.write(data, address - 0xFF00);
-      if (address == 0xFF46) {
-        this->dma.dma_start(data);
-      }
+      uint8_t *P1 = this->get_address(0xFF00);
+      data = data & 0x30;
+      *P1 = (data & 0x30) | (*P1 & 0x0F);
+      return;
+    }
+    this->io.write(data, address - 0xFF00);
+    if (address == 0xFF46) {
+      this->dma.dma_start(data);
     }
   }
   if (address >= 0xFF80 && address <= 0xFFFF) {
@@ -84,7 +82,7 @@ uint8_t Bus::read(uint16_t address) {
 }
 
 uint8_t *Bus::get_address(uint16_t address) {
-  if (address >= 0x0000 && address <= 0x7FFF) {
+  if (address <= 0x7FFF) {
     return nullptr;
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
@@ -116,6 +114,7 @@ void Bus::clock() {
     *div += 1;
     div_counter = 0;
   }
+  timer_clock(1);
 }
 
 void Bus::clock(uint8_t cycles) {
@@ -127,6 +126,7 @@ void Bus::clock(uint8_t cycles) {
       *div += 1;
       div_counter = 0;
     }
+    timer_clock(1);
   }
 }
 

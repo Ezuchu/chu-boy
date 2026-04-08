@@ -279,6 +279,7 @@ void Cpu::connectBus(Bus *bus) {
   Cpu::bus = bus;
   IE = bus->get_address(0xFFFF);
   IF = bus->get_address(0xFF0F);
+  // print_state();
 }
 
 void Cpu::fetch_instruction() {
@@ -443,14 +444,15 @@ void Cpu::push_to_interrupt(uint16_t address) {
 }
 
 void Cpu::step() {
-  if (IME && (*IE & *IF) != 0) {
+  if (IME && ((*IE & *IF) != 0)) {
+
     handle_interrupt();
   } else {
     if (!is_halted) {
-      // print_state();
       fetch_instruction();
       execute_mode();
       execute_instruction();
+      // print_state();
     }
   }
 }
@@ -571,7 +573,7 @@ void Cpu::AM_R_FFD8() {
   exec_cycle(1);
   uint8_t lower_byte = read(pc++);
   exec_cycle(1);
-  this->operand2 = read(0xFF00 | lower_byte);
+  this->operand2 = read(0xFF00 | lower_byte) & 0x00FF;
   address_type = to_reg;
   bit16 = false;
 }
