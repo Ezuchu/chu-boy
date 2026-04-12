@@ -5,6 +5,7 @@
 #include "mbc.h"
 #include "memory.h"
 #include "ppu.h"
+#include "apu.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -22,6 +23,7 @@ public:
 
   Cpu cpu;
   Ppu ppu;
+  Apu apu;
   rom_controller *rom = nullptr;
   Vga *vga = nullptr;
   DMA dma;

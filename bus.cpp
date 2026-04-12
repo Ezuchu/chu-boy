@@ -4,7 +4,7 @@
 
 Bus::Bus()
     : ram(0x4000), Vram(0x4000), Oam(0x0100), io(0x0080), hram(0x0080),
-      dma(this) {
+      dma(this), apu() {
   this->write(0xff, 0xFF00);
   this->tima = this->io.get_address(0x05);
   this->tma = this->io.get_address(0x06);
@@ -17,6 +17,8 @@ Bus::Bus()
   *tma = 0x00;
   *tima = 0x00;
   *IF = 0x00;
+
+  this->apu.connectBus(this);
 }
 
 Bus::~Bus() {}
@@ -44,6 +46,30 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->io.write(data, address - 0xFF00);
     if (address == 0xFF46) {
       this->dma.dma_start(data);
+    }
+    switch (address) {
+    case 0xFF14:
+      this->apu.update_channel_reg1();
+      break;
+    case 0xFF19:
+      this->apu.update_channel_reg2();
+      break;
+    case 0xFF1E:
+      this->apu.update_channel_reg3();
+      break;
+    case 0xFF23:
+      this->apu.update_channel_reg4();
+      break;
+    case 0xFF26:
+      if (data & 0x80) {
+        this->apu.update_channel_reg1();
+        this->apu.update_channel_reg2();
+        this->apu.update_channel_reg3();
+        this->apu.update_channel_reg4();
+      }
+      break;
+    default:
+      break;
     }
   }
   if (address >= 0xFF80 && address <= 0xFFFF) {
@@ -107,6 +133,7 @@ uint8_t *Bus::get_address(uint16_t address) {
 void Bus::clock() {
   this->cpu.step();
   this->dma.dma_step();
+  this->apu.step(1);
   this->ppu.step(4);
 
   this->div_counter += 1;
@@ -120,11 +147,13 @@ void Bus::clock() {
 void Bus::clock(uint8_t cycles) {
   for (int i = 0; i < cycles; i++) {
     this->dma.dma_step();
+    this->apu.step(1);
     this->ppu.step(4);
+
     this->div_counter += 1;
-    if (div_counter == 64) {
+    if (this->div_counter == 64) {
       *div += 1;
-      div_counter = 0;
+      this->div_counter = 0;
     }
     timer_clock(1);
   }
