@@ -11,7 +11,7 @@ void Ppu::sort_objects_by_x() {}
 void Ppu::oamSearch() {
   if (this->state != OAMsearch) {
     this->state = OAMsearch;
-    *LCDC = (*LCDC & 0xFC) | 0x02;
+
     *STAT = (*STAT & 0xFC) | 0x02;
 
     if ((*STAT & 0x20) == 0x20) {
@@ -20,7 +20,7 @@ void Ppu::oamSearch() {
     }
   }
   this->state = OAMsearch;
-  *LCDC = (*LCDC & 0xFB) | 0x02;
+
   uint8_t up_limit;
   uint8_t down_limit;
   uint8_t size;
@@ -36,7 +36,8 @@ void Ppu::oamSearch() {
 
   object_type *obj = (object_type *)bus->Oam.get_address(oam_index);
   if (obj->y > up_limit && obj->y < down_limit && obj_index < 10) {
-    if (*LY >= obj->y - 16 && *LY < (obj->y - 16 + size)) {
+    int ypos = (int)obj->y - 16;
+    if (*LY >= ypos && *LY < (ypos + size)) {
       objects[obj_index] = obj;
       obj_index++;
     }
@@ -48,7 +49,7 @@ void Ppu::pixelTransfer() {
   // TODO: object pixel_search
   if (this->state != Pixeltransfer) {
     this->state = Pixeltransfer;
-    *LCDC = (*LCDC & 0xFC) | 0x03;
+
     *STAT = (*STAT & 0xFC) | 0x03;
     act_obj_index = 0;
   }
@@ -186,7 +187,7 @@ void Ppu::backgroundTransfer() {
 void Ppu::hBlank() {
   if (this->state != HBlank) {
     this->state = HBlank;
-    *LCDC = (*LCDC & 0xFC) | 0x00;
+
     *STAT = (*STAT & 0xFC) | 0x00;
     this->obj_index = 0;
 
@@ -204,7 +205,7 @@ void Ppu::hBlank() {
 void Ppu::vBlank() {
   if (this->state != VBlank) {
     this->state = VBlank;
-    *LCDC = (*LCDC & 0xFC) | 0x01;
+
     *STAT = (*STAT & 0xFC) | 0x01;
 
     if ((*STAT & 0x10) == 0x10) {
