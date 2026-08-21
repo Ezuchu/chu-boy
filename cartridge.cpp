@@ -16,8 +16,14 @@ Cartridge::Cartridge(std::string rom_name) {
   rom_file.get(reinterpret_cast<char &>(this->cgb_flag));
   rom_file.read(this->license, 2);
   rom_file.seekg((int)rom_file.tellg() + 0x1);
+
+  rom_file.seekg(0x0147);
   rom_file.get(reinterpret_cast<char &>(this->cartridge_type));
+
+  rom_file.seekg(0x0148);
   rom_file.get(reinterpret_cast<char &>(this->rom_size));
+
+  rom_file.seekg(0x0149);
   rom_file.get(reinterpret_cast<char &>(this->ram_size));
 
   rom_file.seekg(0x0);

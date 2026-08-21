@@ -25,13 +25,16 @@ Bus::~Bus() {}
 
 void Bus::write(uint8_t data, uint16_t address) {
   if (address >= 0x0000 && address <= 0x7FFF) {
-    return;
+    this->rom->write(address, data);
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
     this->ram.write(data, address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
     this->Vram.write(data, address - 0x8000);
+  }
+  if (address >= 0xA000 && address <= 0xBFFF) {
+    this->rom->write(address, data);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
     this->Oam.write(data, address - 0xFE00);
@@ -90,6 +93,9 @@ uint8_t Bus::read(uint16_t address) {
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
     return this->Vram.read(address - 0x8000);
+  }
+  if (address >= 0xA000 && address <= 0xBFFF) {
+    return this->rom->read(address);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
     return this->Oam.read(address - 0xFE00);

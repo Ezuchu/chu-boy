@@ -10,3 +10,5 @@ void No_mbc_controller::load_cartridge(Cartridge *cart) {
 }
 
 uint8_t No_mbc_controller::read(uint16_t address) { return *(data + address); }
+
+void No_mbc_controller::write(uint16_t address, uint8_t data) {}

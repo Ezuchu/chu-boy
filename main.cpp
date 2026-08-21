@@ -2,7 +2,7 @@
 #include "cartridge.h"
 #include "cpu.h"
 #include "joyPad.h"
-#include "no_mbc.h"
+#include "mbc.h"
 #include "vga.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -34,16 +34,20 @@ int main(int argc, char **argv) {
 
   Cartridge *cart = new Cartridge(argv[1]);
 
-  No_mbc_controller *rom_controller = new No_mbc_controller();
+  rom_controller *mbc = mbc_factory::create_mbc(cart);
 
-  rom_controller->load_cartridge(cart);
+  if (!mbc) {
+    std::cout << "Could not create mbc" << std::endl;
+    return 1;
+  }
+  mbc->load_cartridge(cart);
 
   uint16_t key_config[8] = {SDL_SCANCODE_J, SDL_SCANCODE_K, SDL_SCANCODE_U,
                             SDL_SCANCODE_I, SDL_SCANCODE_W, SDL_SCANCODE_S,
                             SDL_SCANCODE_A, SDL_SCANCODE_D};
 
   Bus *bus = new Bus();
-  bus->rom = rom_controller;
+  bus->rom = mbc;
   bus->cpu = Cpu();
   bus->cpu.connectBus(bus);
   bus->ppu = Ppu();
@@ -82,6 +86,6 @@ int main(int argc, char **argv) {
   delete cart;
   delete bus;
   delete vga;
-  delete rom_controller;
+  delete mbc;
   return 0;
 }

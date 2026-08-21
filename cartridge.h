@@ -11,6 +11,8 @@ enum cart_type { ROM_ONLY = 0x0 };
 class Cartridge {
 
   uint8_t *rom_data;
+
+public:
   char game_title[16];
   bool cgb_flag;
   char license[2];
@@ -18,7 +20,6 @@ class Cartridge {
   uint8_t rom_size;
   uint8_t ram_size;
 
-public:
   Cartridge(std::string rom_name);
   ~Cartridge() { delete[] rom_data; };
 
