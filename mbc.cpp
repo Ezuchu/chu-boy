@@ -19,6 +19,7 @@ void MBC_1::load_cartridge(Cartridge *cart) {
 }
 
 void MBC_1::write(uint16_t address, uint8_t data) {
+  static const int rom_ref[] = {0, 0x3, 0x7, 0xF, 0x1F, 0x1F, 0x1F};
   if (address <= 0x1FFF) {
     if (data == 0xA) {
       ram_enable = true;
@@ -26,10 +27,10 @@ void MBC_1::write(uint16_t address, uint8_t data) {
       ram_enable = false;
     }
   } else if (address <= 0x3FFF) {
-    bank1 = (data & 0x1F) == 0 ? 1 : data & 0x1F;
+    bank1 = (data & 0x1F) == 0 ? 1 : data & rom_ref[this->rom_size];
   } else if (address <= 0x5FFF) {
     if (rom_size > 4) {
-      bank2 = data & 0x3;
+      bank2 = rom_size == 5 ? data & 0x1 : data & 0x3;
     }
     if (ram_enable && ram_size > 2) {
       ram_bank_number = data & 0x3;

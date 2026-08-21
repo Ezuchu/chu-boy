@@ -1,14 +1,15 @@
 #pragma once
 
+#include "apu.h"
 #include "cpu.h"
 #include "dma.h"
 #include "mbc.h"
 #include "memory.h"
 #include "ppu.h"
-#include "apu.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+
 
 class rom_controller;
 class Vga;
@@ -42,7 +43,7 @@ public:
   ~Bus();
 
   void write(uint8_t data, uint16_t address);
-  uint8_t read(uint16_t address);
+  uint8_t read(uint16_t address, bool is_cpu = false);
   uint8_t *get_address(uint16_t address);
   void clock();
   void clock(uint8_t cycles);

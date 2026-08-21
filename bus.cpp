@@ -31,12 +31,16 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->ram.write(data, address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
+    if ((this->read(0xFF41) & 0x03) == 0x03)
+      return;
     this->Vram.write(data, address - 0x8000);
   }
   if (address >= 0xA000 && address <= 0xBFFF) {
     this->rom->write(address, data);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
+    if ((this->read(0xFF41) & 0x03) > 0x01)
+      return;
     this->Oam.write(data, address - 0xFE00);
   }
   if (address >= 0xFF00 && address <= 0xFF7F) {
@@ -80,7 +84,7 @@ void Bus::write(uint8_t data, uint16_t address) {
   }
 }
 
-uint8_t Bus::read(uint16_t address) {
+uint8_t Bus::read(uint16_t address, bool is_cpu) {
 
   if (address <= 0x7FFF) {
     if (this->rom == nullptr) {
@@ -92,12 +96,16 @@ uint8_t Bus::read(uint16_t address) {
     return this->ram.read(address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
+    if ((this->read(0xFF41) & 0x03) == 0x03 && is_cpu)
+      return 0xFF;
     return this->Vram.read(address - 0x8000);
   }
   if (address >= 0xA000 && address <= 0xBFFF) {
     return this->rom->read(address);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
+    if ((this->read(0xFF41) & 0x03) > 0x01 && is_cpu)
+      return 0xFF;
     return this->Oam.read(address - 0xFE00);
   }
   if (address >= 0xFF00 && address <= 0xFF7F) {

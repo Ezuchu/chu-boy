@@ -250,7 +250,7 @@ Cpu::Cpu() {
   op_table[0xE5] = {&Cpu::PUSH, &Cpu::AM_RR, regHL, None, No_cond};
   op_table[0xE6] = {&Cpu::AND, &Cpu::AM_R_D8, regA, None, No_cond};
   op_table[0xE7] = {&Cpu::RST, &Cpu::NONE, None, None, No_cond};
-  op_table[0xE8] = {&Cpu::ADD, &Cpu::AM_RR_NN, regSP, None, No_cond};
+  op_table[0xE8] = {&Cpu::ADD, &Cpu::AM_SP_S8, regSP, None, No_cond};
   op_table[0xE9] = {&Cpu::JP, &Cpu::AM_RR, regHL, None, No_cond};
   op_table[0xEA] = {&Cpu::LD, &Cpu::AM_a16_R, regA, None, No_cond};
   op_table[0xEE] = {&Cpu::XOR, &Cpu::AM_R_D8, regA, None, No_cond};
@@ -297,7 +297,7 @@ void Cpu::decode() {}
 void Cpu::write(uint8_t data, uint16_t address) {
   Cpu::bus->write(data, address);
 }
-uint8_t Cpu::read(uint16_t address) { return Cpu::bus->read(address); }
+uint8_t Cpu::read(uint16_t address) { return Cpu::bus->read(address, true); }
 
 uint16_t Cpu::get_reg(reg_code type) {
   switch (type) {
@@ -729,6 +729,9 @@ void Cpu::LD() {
   uint16_t data = operand2;
 
   if (address_type == to_reg) {
+    if (opcode == 0XF9) {
+      exec_cycle(1);
+    }
     set_reg(this->act_instruction->reg1, data);
   } else {
     if (!bit16) {
@@ -801,6 +804,7 @@ void Cpu::ADD() {
       high_result = low_result >> 8;
       hy_op_low = (sp & 0x000F) + ((int8_t)(s8 & 0x000F));
 
+      exec_cycle(1);
     } else {
       low_result =
           (get_reg(act_instruction->reg1) & 0x00FF) + (operand2 & 0x00FF);
