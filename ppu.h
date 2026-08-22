@@ -44,16 +44,18 @@ class Ppu {
   object_type *objects[10];
   object_type *obj = nullptr;
 
+  uint8_t pixel_to_draw = 0;
+
   Bus *bus = nullptr;
   Vga *vga = nullptr;
 
   void sort_objects_by_x();
 
   void oamSearch();
-  void objectTransfer(object_type *obj);
+  uint8_t getObjPixel(object_type *obj);
   void pixelTransfer();
-  void windowTransfer();
-  void backgroundTransfer();
+  uint8_t getWinPixel();
+  uint8_t getBgPixel();
   void hBlank();
   void vBlank();
 
