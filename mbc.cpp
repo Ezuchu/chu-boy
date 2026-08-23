@@ -1,9 +1,14 @@
 #include "mbc.h"
+#include <cstring>
 
-MBC_1::MBC_1() {}
+MBC_1::MBC_1(bool has_battery) { this->battery = has_battery; }
+
 MBC_1::~MBC_1() { delete[] ram_bank; }
 
 void MBC_1::load_cartridge(Cartridge *cart) {
+
+  this->filename = cart->filename;
+  this->savename = filename.substr(0, filename.find_last_of(".")) + ".sav";
 
   this->rom_bank = cart->return_rom_data();
   this->rom_size = rom_bank[0x0148];
@@ -16,6 +21,18 @@ void MBC_1::load_cartridge(Cartridge *cart) {
   this->ram_bank = new uint8_t[ram_ref[this->ram_size]];
   this->ram_bank_number = 0;
   this->ram_enable = false;
+
+  if (ram_ref[this->ram_size] > 1) {
+    std::ifstream rom_save;
+    rom_save.open(savename, std::ifstream::binary);
+    if (battery && rom_save.is_open()) {
+      rom_save.read(reinterpret_cast<char *>(ram_bank),
+                    ram_ref[this->ram_size]);
+      rom_save.close();
+    } else {
+      memset(this->ram_bank, 0x00, ram_ref[this->ram_size]);
+    }
+  }
 }
 
 void MBC_1::write(uint16_t address, uint8_t data) {

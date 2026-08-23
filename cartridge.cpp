@@ -1,6 +1,7 @@
 #include "cartridge.h"
 
 Cartridge::Cartridge(std::string rom_name) {
+  this->filename = rom_name;
   this->rom_data = nullptr;
   std::ifstream rom_file;
 

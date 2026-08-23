@@ -13,6 +13,8 @@ class Cartridge {
   uint8_t *rom_data;
 
 public:
+  std::string filename;
+
   char game_title[16];
   bool cgb_flag;
   char license[2];
