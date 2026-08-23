@@ -83,9 +83,10 @@ int main(int argc, char **argv) {
     SDL_DestroyWindow(window);
   SDL_Quit();
 
-  delete cart;
+  delete mbc;
   delete bus;
   delete vga;
-  delete mbc;
+
+  delete cart;
   return 0;
 }

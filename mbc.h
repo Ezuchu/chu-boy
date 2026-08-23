@@ -15,10 +15,11 @@ protected:
   std::string savename;
 
 public:
-  virtual ~rom_controller() = default;
+  virtual ~rom_controller() { std::cout << "" << std::endl; }
   virtual void load_cartridge(Cartridge *cart) = 0;
   virtual uint8_t read(uint16_t address) = 0;
   virtual void write(uint16_t address, uint8_t data) = 0;
+  virtual void save_state() = 0;
 };
 
 class MBC_1 : public rom_controller {
@@ -38,10 +39,11 @@ private:
 
 public:
   MBC_1(bool has_battery = false);
-  ~MBC_1();
+  ~MBC_1() override;
   void load_cartridge(Cartridge *cart) override;
   uint8_t read(uint16_t address) override;
   void write(uint16_t address, uint8_t data) override;
+  void save_state() override;
 };
 
 class mbc_factory {

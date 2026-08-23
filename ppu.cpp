@@ -344,6 +344,7 @@ void Ppu::step(uint8_t cycles) {
             if (*LY >= 154) {
               *LY = 0;
               vga->render();
+              bus->frame_completed();
             }
             if (*LY == *LYC) {
               *STAT |= 0x04;

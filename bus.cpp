@@ -24,7 +24,14 @@ Bus::Bus()
   this->apu.connectBus(this);
 }
 
-Bus::~Bus() {}
+Bus::~Bus() {
+  /*delete this->ram;
+  delete this->Vram;
+  delete this->Oam;
+  delete this->io;
+  delete this->hram;*/
+  std::cout << "delete bus\n";
+}
 
 void Bus::write(uint8_t data, uint16_t address) {
   if (address >= 0x0000 && address <= 0x7FFF) {
@@ -183,6 +190,14 @@ void Bus::clock(uint8_t cycles) {
       this->div_counter = 0;
     }
     timer_clock(1);
+  }
+}
+
+void Bus::frame_completed() {
+  this->frame_counter++;
+  if (frame_counter >= save_frame_interval) {
+    this->rom->save_state();
+    this->frame_counter = 0;
   }
 }
 

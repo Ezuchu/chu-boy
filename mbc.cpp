@@ -3,7 +3,11 @@
 
 MBC_1::MBC_1(bool has_battery) { this->battery = has_battery; }
 
-MBC_1::~MBC_1() { delete[] ram_bank; }
+MBC_1::~MBC_1() {
+  std::cout << "in destructor" << std::endl;
+  save_state();
+  delete[] ram_bank;
+}
 
 void MBC_1::load_cartridge(Cartridge *cart) {
 
@@ -35,6 +39,20 @@ void MBC_1::load_cartridge(Cartridge *cart) {
   }
 }
 
+void MBC_1::save_state() {
+  if (battery && ram_ref[this->ram_size] > 1) {
+    std::ofstream rom_save;
+    rom_save.open(savename, std::ofstream::binary);
+    if (rom_save.is_open()) {
+      std::cout << "open" << std::endl;
+      rom_save.write(reinterpret_cast<char *>(ram_bank),
+                     ram_ref[this->ram_size]);
+      rom_save.close();
+      std::cout << "saved" << std::endl;
+    }
+  }
+}
+
 void MBC_1::write(uint16_t address, uint8_t data) {
   static const int rom_ref[] = {0, 0x3, 0x7, 0xF, 0x1F, 0x1F, 0x1F};
   if (address <= 0x1FFF) {
@@ -56,7 +74,11 @@ void MBC_1::write(uint16_t address, uint8_t data) {
     bank_mode = data & 0x1;
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_enable && ram_size > 1) {
-      ram_bank[address - 0xA000 + (0x2000 * ram_bank_number)] = data;
+      if (bank_mode == 0) {
+        ram_bank[address - 0xA000] = data;
+      } else {
+        ram_bank[address - 0xA000 + (0x2000 * ram_bank_number)] = data;
+      }
     }
   }
 }

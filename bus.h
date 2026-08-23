@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 
-
 class rom_controller;
 class Vga;
 
@@ -39,6 +38,9 @@ public:
   uint16_t timer_counter = 0;
   uint16_t div_counter = 0;
 
+  uint32_t frame_counter = 0;
+  uint32_t save_frame_interval = 600; // 60 frames * seconds
+
   Bus();
   ~Bus();
 
@@ -49,4 +51,6 @@ public:
   void clock(uint8_t cycles);
 
   void timer_clock(uint8_t cycles);
+
+  void frame_completed();
 };
