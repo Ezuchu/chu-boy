@@ -2,7 +2,7 @@
 #include "bus.h"
 #include <cstdint>
 
-Ppu::Ppu() {}
+Ppu::Ppu() { ppu_was_on = true; }
 
 Ppu::~Ppu() {}
 
@@ -278,9 +278,23 @@ void Ppu::connectBus(Bus *bus) {
 
 void Ppu::connectVga(Vga *vga) { this->vga = vga; }
 
-void Ppu::step(uint8_t cycles) {
+void Ppu::handle_enable_disable() {}
 
-  if ((*LCDC & 0x80) == 0x80) {
+void Ppu::step(uint8_t cycles) {
+  if (*LCDC & 0x80 == 0x00) {
+    if (ppu_was_on) {
+      *LY = 0;
+      *STAT &= 0x00;
+      act_cycles = 0;
+      cycle_counter = 0;
+      lx = 0;
+      ppu_was_on = false;
+    }
+  } else {
+    if (!ppu_was_on) {
+      *STAT |= 0x01;
+      ppu_was_on = true;
+    }
     act_cycles += cycles;
     while (act_cycles > 0) {
       if (*LY < 144) {

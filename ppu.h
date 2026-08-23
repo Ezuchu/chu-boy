@@ -16,6 +16,7 @@ class Ppu {
   };
 
   PpuState state;
+  bool ppu_was_on;
 
   uint8_t *LCDC;
   uint8_t *STAT;
@@ -50,6 +51,8 @@ class Ppu {
   Vga *vga = nullptr;
 
   void sort_objects_by_x();
+
+  void handle_enable_disable();
 
   void oamSearch();
   uint8_t getObjPixel(object_type *obj);

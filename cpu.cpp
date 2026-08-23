@@ -444,16 +444,18 @@ void Cpu::push_to_interrupt(uint16_t address) {
 }
 
 void Cpu::step() {
-  if (IME && ((*IE & *IF) != 0)) {
-
-    handle_interrupt();
-  } else {
-    if (!is_halted) {
-      fetch_instruction();
-      execute_mode();
-      execute_instruction();
-      // print_state();
+  if ((*IE & *IF) != 0) {
+    if (IME != false) {
+      handle_interrupt();
+      return;
     }
+    is_halted = false;
+  }
+  if (!is_halted) {
+    fetch_instruction();
+    execute_mode();
+    execute_instruction();
+    // print_state();
   }
 }
 

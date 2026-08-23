@@ -54,5 +54,12 @@ void JoyPad::get_state(const bool *key_state) {
       state &= (uint8_t)~0x04;
     }
   }
+
+  // A button is pressed
+  if ((state & 0x0F) != 0x0F) {
+    *bus->IF |= 0x10;
+  } else {
+    *bus->IF &= (uint8_t)~0x10;
+  }
   *P1 = state;
 }

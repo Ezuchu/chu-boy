@@ -18,6 +18,9 @@ Bus::Bus()
   *tima = 0x00;
   *IF = 0x00;
 
+  this->timer_counter = 0;
+  this->div_counter = 0;
+
   this->apu.connectBus(this);
 }
 
@@ -31,7 +34,8 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->ram.write(data, address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
-    if ((this->read(0xFF41) & 0x03) == 0x03)
+    if ((this->read(0xFF40) & 0x80) == 0x80 &&
+        (this->read(0xFF41) & 0x03) == 0x03)
       return;
     this->Vram.write(data, address - 0x8000);
   }
@@ -39,7 +43,8 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->rom->write(address, data);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
-    if ((this->read(0xFF41) & 0x03) > 0x01)
+    if ((this->read(0xFF40) & 0x80) == 0x80 &&
+        (this->read(0xFF41) & 0x03) > 0x01)
       return;
     this->Oam.write(data, address - 0xFE00);
   }
@@ -48,6 +53,11 @@ void Bus::write(uint8_t data, uint16_t address) {
       uint8_t *P1 = this->get_address(0xFF00);
       data = data & 0x30;
       *P1 = (data & 0x30) | (*P1 & 0x0F);
+      return;
+    }
+    if (address == 0xFF04) {
+      this->div_counter = 0;
+      *div = 0x00;
       return;
     }
     this->io.write(data, address - 0xFF00);
@@ -96,7 +106,9 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     return this->ram.read(address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
-    if ((this->read(0xFF41) & 0x03) == 0x03 && is_cpu)
+    // Vram check access for cpu
+    if ((this->read(0xFF40) & 0x80) == 0x80 &&
+        (this->read(0xFF41) & 0x03) == 0x03 && is_cpu)
       return 0xFF;
     return this->Vram.read(address - 0x8000);
   }
@@ -104,7 +116,8 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     return this->rom->read(address);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
-    if ((this->read(0xFF41) & 0x03) > 0x01 && is_cpu)
+    if ((this->read(0xFF40) & 0x80) == 0x80 &&
+        (this->read(0xFF41) & 0x03) > 0x01 && is_cpu)
       return 0xFF;
     return this->Oam.read(address - 0xFE00);
   }
