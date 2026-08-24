@@ -1,4 +1,4 @@
-#include "mbc.h"
+#include "mbc_1.h"
 #include <cstring>
 
 MBC_1::MBC_1(bool has_battery) { this->battery = has_battery; }

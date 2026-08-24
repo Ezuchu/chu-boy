@@ -1,4 +1,5 @@
 #include "mbc.h"
+#include "mbc_1.h"
 #include "no_mbc.h"
 
 rom_controller *mbc_factory::create_mbc(Cartridge *cart) {
