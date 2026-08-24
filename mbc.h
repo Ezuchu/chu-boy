@@ -11,6 +11,13 @@ protected:
   uint8_t rom_size;
   uint8_t ram_size;
 
+  uint8_t *rom_bank;
+  uint8_t *ram_bank;
+
+  uint8_t ram_bank_number;
+  bool ram_enable;
+  bool battery;
+
   std::string filename;
   std::string savename;
 
