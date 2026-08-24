@@ -48,6 +48,7 @@ private:
   bool IME = false;
   uint8_t *IE = nullptr;
   uint8_t *IF = nullptr;
+  bool halt_bug = false;
 
   Bus *bus = nullptr;
 

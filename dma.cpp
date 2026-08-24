@@ -20,7 +20,7 @@ uint8_t DMA::read() {
 
 void DMA::write(uint8_t data) {
   if (this->state) {
-    this->bus->write(data, this->act_OAM++);
+    this->bus->Oam.write(data, (this->act_OAM++) - 0xFE00);
   }
 }
 

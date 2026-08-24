@@ -50,8 +50,9 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->rom->write(address, data);
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
-    if ((this->read(0xFF40) & 0x80) == 0x80 &&
-        (this->read(0xFF41) & 0x03) > 0x01)
+    if (((this->read(0xFF40) & 0x80) == 0x80 &&
+         (this->read(0xFF41) & 0x03) > 0x01) ||
+        this->dma.state)
       return;
     this->Oam.write(data, address - 0xFE00);
   }

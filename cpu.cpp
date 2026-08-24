@@ -284,7 +284,13 @@ void Cpu::connectBus(Bus *bus) {
 
 void Cpu::fetch_instruction() {
 
-  this->opcode = this->read(Cpu::pc++);
+  if (halt_bug) {
+    // halt bug: cpu fails to increment pc after a halt
+    halt_bug = false;
+    this->opcode = this->read(Cpu::pc);
+  } else {
+    this->opcode = this->read(Cpu::pc++);
+  }
 
   this->act_instruction = &op_table[opcode];
 }
@@ -669,7 +675,13 @@ void Cpu::NOP() {}
 
 void Cpu::STOP() {}
 
-void Cpu::HALT() { is_halted = true; }
+void Cpu::HALT() {
+  if (IME == 0 && (*IF & *IE) != 0) {
+    halt_bug = true;
+  } else {
+    is_halted = true;
+  }
+}
 
 void Cpu::EI() { IME = true; }
 

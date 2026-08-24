@@ -63,8 +63,7 @@ void Ppu::pixelTransfer() {
           uint8_t obj_pixel = this->getObjPixel(objects[i]);
           if (obj_pixel != 0) {
             if (obj != nullptr) {
-              if (objects[i]->x < obj->x &&
-                  (obj->flags && 0x80) < (objects[i]->flags && 0x80)) {
+              if ((obj->flags & 0x80) < (objects[i]->flags & 0x80)) {
                 obj = objects[i];
                 obj_act_pixel = obj_pixel;
               }
@@ -94,7 +93,8 @@ void Ppu::pixelTransfer() {
   }
 
   if (obj_act_pixel == 0 || ((obj->flags & 0x80) == 0x80) && bg_pixel != 0) {
-    this->vga->push_pixel(bg_pixel, lx, *LY);
+    uint8_t bg_color = (*BGP >> (bg_pixel * 2)) & 0x03;
+    this->vga->push_pixel(bg_color, lx, *LY);
   } else {
     uint8_t final_color;
     if ((obj->flags & 0x10) == 0x10) {
@@ -107,7 +107,9 @@ void Ppu::pixelTransfer() {
 }
 
 uint8_t Ppu::getObjPixel(object_type *obj) {
-  uint8_t obj_x = (lx - obj->x + 8) % 8;
+  int obj_x = (lx - obj->x + 8) % 8;
+  if (obj_x < 0)
+    obj_x += 8;
   int obj_y = (int)(*LY) - ((int)obj->y - 16);
   uint16_t obj_tile = obj->tile;
   uint8_t obj_flags = obj->flags;
@@ -134,7 +136,7 @@ uint8_t Ppu::getObjPixel(object_type *obj) {
   uint8_t obj_pixel_low = bus->read(tile_data_address + (2 * row));
   uint8_t obj_pixel_high = bus->read(tile_data_address + (2 * row) + 0x0001);
 
-  uint8_t pixel_num = x_flip ? obj_x : 7 - obj_x;
+  int pixel_num = x_flip ? obj_x : 7 - obj_x;
 
   uint8_t obj_pixel = ((obj_pixel_high >> (pixel_num)) & 0x01) << 1 |
                       ((obj_pixel_low >> (pixel_num)) & 0x01);
@@ -181,7 +183,6 @@ uint8_t Ppu::getWinPixel() {
                          << 1 |
                      ((bg_pixel_low >> (7 - ((lx - (*WX - 7)) % 8))) & 0x01);
 
-  bg_pixel = (*BGP >> (bg_pixel * 2)) & 0x03;
   return bg_pixel;
   /*
 this->vga->push_pixel(bg_pixel, lx, *LY);*/
@@ -211,8 +212,6 @@ uint8_t Ppu::getBgPixel() {
 
   uint8_t bg_pixel = ((bg_pixel_high >> (7 - ((*SCX + lx) % 8))) & 0x01) << 1 |
                      ((bg_pixel_low >> (7 - ((*SCX + lx) % 8))) & 0x01);
-
-  bg_pixel = (*BGP >> (bg_pixel * 2)) & 0x03;
 
   return bg_pixel;
 
