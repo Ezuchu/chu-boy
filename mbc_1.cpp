@@ -62,7 +62,9 @@ void MBC_1::write(uint16_t address, uint8_t data) {
       ram_enable = false;
     }
   } else if (address <= 0x3FFF) {
-    bank1 = (data & 0x1F) == 0 ? 1 : data & rom_ref[this->rom_size];
+    bank1 = (data & rom_ref[this->rom_size]) == 0
+                ? 1
+                : data & rom_ref[this->rom_size];
   } else if (address <= 0x5FFF) {
     if (rom_size > 4) {
       bank2 = rom_size == 5 ? data & 0x1 : data & 0x3;

@@ -46,6 +46,7 @@ private:
 
   bool is_halted = false;
   bool IME = false;
+  bool IME_pending = false;
   uint8_t *IE = nullptr;
   uint8_t *IF = nullptr;
   bool halt_bug = false;

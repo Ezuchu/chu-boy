@@ -461,6 +461,12 @@ void Cpu::step() {
     fetch_instruction();
     execute_mode();
     execute_instruction();
+
+    // Enable IME if pending from EI
+    if (IME_pending && opcode != 0xFB) {
+      IME = true;
+      IME_pending = false;
+    }
     // print_state();
   }
 }
@@ -647,6 +653,9 @@ void Cpu::AM_SP_S8() {
 
 void Cpu::AM_HL_SP_S8() {
   exec_cycle(1);
+  address_type = to_reg;
+  bit16 = true;
+
   int8_t s8 = (int8_t)read(pc++);
   uint16_t low_result = sp + s8;
   uint16_t high_result = (low_result >> 8);
@@ -683,9 +692,12 @@ void Cpu::HALT() {
   }
 }
 
-void Cpu::EI() { IME = true; }
+void Cpu::EI() { IME_pending = true; }
 
-void Cpu::DI() { IME = false; }
+void Cpu::DI() {
+  IME = false;
+  IME_pending = false;
+}
 
 void Cpu::CB() {
   exec_cycle(1);
