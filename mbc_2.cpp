@@ -18,10 +18,11 @@ void MBC_2::load_cartridge(Cartridge *cart) {
   this->rom_size = rom_bank[0x0148];
   this->bank_number = 0x01;
 
+  this->ram_size = 0;
+
   std::cout << (int)rom_size << " " << (int)ram_size << std::endl;
 
   this->ram_bank = new uint8_t[0x200]; // 512 bytes
-  this->ram_bank_number = 0;
   this->ram_enable = false;
 
   if (battery) {
@@ -31,7 +32,7 @@ void MBC_2::load_cartridge(Cartridge *cart) {
       rom_save.read(reinterpret_cast<char *>(ram_bank), 0x200);
       rom_save.close();
     } else {
-      memset(this->ram_bank, 0x00, 0x200);
+      memset(this->ram_bank, 0xF0, 0x200);
     }
   }
 }
@@ -54,9 +55,7 @@ void MBC_2::write(uint16_t address, uint8_t data) {
   if (address <= 0x3FFF) {
     if (address & 0x0100) {
       // switch rom bank
-      bank_number = (data & rom_ref[this->rom_size]) == 0x00
-                        ? 0x01
-                        : data & rom_ref[this->rom_size];
+      bank_number = (data & 0x0F) == 0 ? 1 : (data & 0x0F) & rom_ref[rom_size];
     } else {
       // enable-disable ram
       if ((data & 0x0F) == 0x0A) {
@@ -67,7 +66,7 @@ void MBC_2::write(uint16_t address, uint8_t data) {
     }
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_enable) {
-      ram_bank[(address - 0xA000) & 0x01FF] = (data & 0x0F);
+      ram_bank[(address - 0xA000) & 0x01FF] = (data & 0x0F) | 0xF0;
     }
   }
 }

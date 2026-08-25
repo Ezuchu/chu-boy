@@ -686,11 +686,14 @@ void Cpu::STOP() {}
 
 void Cpu::HALT() {
   if (IME == false) {
-    if ((*IF & *IE & 0x1F) != 0) {
+    if (((*IF & *IE) & 0x1F) != 0) {
       halt_bug = true;
+
     } else {
       is_halted = true;
     }
+  } else {
+    is_halted = true;
   }
 }
 

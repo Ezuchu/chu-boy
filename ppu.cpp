@@ -11,15 +11,18 @@ void Ppu::sort_objects_by_x() {}
 void Ppu::oamSearch() {
   if (this->state != OAMsearch) {
     this->state = OAMsearch;
+    /*static int anterior = 256;
+    if (((int)*LCDC) != anterior) {
+      std::cout << std::hex << (int)*LCDC << std::endl;
+      anterior = (int)*LCDC;
+    }*/
 
     *STAT = (*STAT & 0xFC) | 0x02;
-
-    if ((*STAT & 0x20) == 0x20) {
-      // request interrupt
-      *IF |= 0x02;
-    }
   }
-  this->state = OAMsearch;
+  if ((*STAT & 0x20) == 0x20) {
+    // request interrupt
+    *IF |= 0x02;
+  }
 
   uint8_t up_limit;
   uint8_t down_limit;
@@ -225,14 +228,15 @@ void Ppu::hBlank() {
     *STAT = (*STAT & 0xFC) | 0x00;
     this->obj_index = 0;
 
-    if ((*STAT & 0x08) == 0x08) {
-      // request interrupt
-      *IF |= 0x02;
-    }
     //*STAT = (*STAT & 0xA4) | 0x08;
 
     // request interrupt
     //*IF |= 0x02;
+  }
+  if ((*STAT & 0x08) == 0x08) {
+    // request interrupt
+
+    *IF |= 0x02;
   }
 }
 
@@ -242,15 +246,14 @@ void Ppu::vBlank() {
 
     *STAT = (*STAT & 0xFC) | 0x01;
 
-    if ((*STAT & 0x10) == 0x10) {
-      // request interrupt
-      *IF |= 0x02;
-    }
-
     // *STAT = (*STAT & 0xA4) | 0x10;
 
     // request interrupt
     *IF |= 0x01;
+  }
+  if ((*STAT & 0x10) == 0x10) {
+
+    *IF |= 0x02;
   }
 }
 
@@ -280,7 +283,7 @@ void Ppu::connectVga(Vga *vga) { this->vga = vga; }
 void Ppu::handle_enable_disable() {}
 
 void Ppu::step(uint8_t cycles) {
-  if (*LCDC & 0x80 == 0x00) {
+  if ((*LCDC & 0x80) == 0x00) {
     if (ppu_was_on) {
       *LY = 0;
       *STAT &= 0x00;
