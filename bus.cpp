@@ -68,6 +68,10 @@ void Bus::write(uint8_t data, uint16_t address) {
       *div = 0x00;
       return;
     }
+    if (address == 0xFF0F) {
+      *IF = data | 0xE0;
+      return;
+    }
     this->io.write(data, address - 0xFF00);
     if (address == 0xFF46) {
       this->dma.dma_start(data);

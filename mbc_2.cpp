@@ -52,15 +52,14 @@ void MBC_2::save_state() {
 void MBC_2::write(uint16_t address, uint8_t data) {
   static const int rom_ref[] = {0, 0x03, 0x07, 0x0F, 0x0F, 0x0F, 0x0F};
   if (address <= 0x3FFF) {
-    uint8_t high_address = uint8_t(address >> 8);
-    if (high_address & 0x01) {
+    if (address & 0x0100) {
       // switch rom bank
       bank_number = (data & rom_ref[this->rom_size]) == 0x00
                         ? 0x01
                         : data & rom_ref[this->rom_size];
     } else {
       // enable-disable ram
-      if (data == 0x0A) {
+      if ((data & 0x0F) == 0x0A) {
         ram_enable = true;
       } else {
         ram_enable = false;
@@ -68,7 +67,7 @@ void MBC_2::write(uint16_t address, uint8_t data) {
     }
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_enable) {
-      ram_bank[(address - 0xA000) & 0x01FF] = data & 0x0F;
+      ram_bank[(address - 0xA000) & 0x01FF] = (data & 0x0F);
     }
   }
 }
@@ -84,12 +83,12 @@ uint8_t MBC_2::read(uint16_t address) {
     if (ram_enable) {
       // ram reading (returns only 4 lower bits)
       if (address <= 0xA1FF) {
-        return (ram_bank[address - 0xA000] | 0xF0);
+        return (ram_bank[address - 0xA000]) | 0xF0;
       } else {
-        return (ram_bank[(address - 0xA000) & 0x01FF] | 0xF0);
+        return (ram_bank[(address - 0xA000) & 0x01FF]) | 0xF0;
       }
     } else {
-      return 0x0F;
+      return 0xFF;
     }
   } else {
     return 0;

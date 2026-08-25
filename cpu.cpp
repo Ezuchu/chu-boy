@@ -287,7 +287,7 @@ void Cpu::fetch_instruction() {
   if (halt_bug) {
     // halt bug: cpu fails to increment pc after a halt
     halt_bug = false;
-    this->opcode = this->read(Cpu::pc);
+    this->opcode = this->read(pc);
   } else {
     this->opcode = this->read(Cpu::pc++);
   }
@@ -420,13 +420,13 @@ bool Cpu::eval_cond() {
 
 void Cpu::handle_interrupt() {
 
-  uint8_t interrupt_enable = *IE;
-  uint8_t interrupt_flag = *IF;
+  uint8_t interrupt_enable = (*IE & 0x1F);
+  uint8_t interrupt_flag = (*IF & 0x1F);
   uint8_t i = 0;
 
   for (i = 0; i < 5; i++) {
-    interrupt_flag = (*IF >> i) & 0x01;
-    interrupt_enable = (*IE >> i) & 0x01;
+    interrupt_flag = ((*IF & 0x1F) >> i) & 0x01;
+    interrupt_enable = ((*IE & 0x1F) >> i) & 0x01;
     if ((interrupt_flag & interrupt_enable) == 0x01) {
       IME = false;
       is_halted = false;
@@ -450,7 +450,7 @@ void Cpu::push_to_interrupt(uint16_t address) {
 }
 
 void Cpu::step() {
-  if ((*IE & *IF) != 0) {
+  if ((*IE & *IF & 0x1F) != 0) {
     if (IME != false) {
       handle_interrupt();
       return;
@@ -685,10 +685,12 @@ void Cpu::NOP() {}
 void Cpu::STOP() {}
 
 void Cpu::HALT() {
-  if (IME == 0 && (*IF & *IE) != 0) {
-    halt_bug = true;
-  } else {
-    is_halted = true;
+  if (IME == false) {
+    if ((*IF & *IE & 0x1F) != 0) {
+      halt_bug = true;
+    } else {
+      is_halted = true;
+    }
   }
 }
 
