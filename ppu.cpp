@@ -286,7 +286,7 @@ void Ppu::step(uint8_t cycles) {
   if ((*LCDC & 0x80) == 0x00) {
     if (ppu_was_on) {
       *LY = 0;
-      *STAT &= 0x00;
+      *STAT &= ~(0x03);
       act_cycles = 0;
       cycle_counter = 0;
       lx = 0;

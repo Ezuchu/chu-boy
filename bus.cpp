@@ -2,9 +2,12 @@
 #include "memory.h"
 #include <cstdint>
 
-Bus::Bus()
+Bus::Bus(bool is_cgb)
     : ram(0x4000), Vram(0x4000), Oam(0x0100), io(0x0080), hram(0x0080),
       dma(this), apu() {
+
+  this->CGB = is_cgb;
+
   this->write(0xff, 0xFF00);
   this->tima = this->io.get_address(0x05);
   this->tma = this->io.get_address(0x06);

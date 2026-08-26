@@ -28,6 +28,8 @@ public:
   Vga *vga = nullptr;
   DMA dma;
 
+  bool CGB = false;
+
   uint8_t *tima = nullptr;
   uint8_t *tma = nullptr;
   uint8_t *tac = nullptr;
@@ -41,7 +43,7 @@ public:
   uint32_t frame_counter = 0;
   uint32_t save_frame_interval = 600; // 60 frames * seconds
 
-  Bus();
+  Bus(bool is_cgb = false);
   ~Bus();
 
   void write(uint8_t data, uint16_t address);
