@@ -21,6 +21,8 @@ public:
   Memory io;
   Memory hram;
 
+  Memory Cram;
+
   Cpu cpu;
   Ppu ppu;
   Apu apu;
@@ -37,6 +39,11 @@ public:
 
   uint8_t *IF = nullptr;
 
+  uint8_t *BGPI = nullptr;
+  uint8_t *BGPD = nullptr;
+  uint8_t *OBPI = nullptr;
+  uint8_t *OBPD = nullptr;
+
   uint16_t timer_counter = 0;
   uint16_t div_counter = 0;
 
@@ -51,6 +58,9 @@ public:
   uint8_t *get_address(uint16_t address);
   void clock();
   void clock(uint8_t cycles);
+
+  void write_bg_cram(uint8_t data);
+  void write_ob_cram(uint8_t data);
 
   void timer_clock(uint8_t cycles);
 

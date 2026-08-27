@@ -4,7 +4,8 @@
 
 Bus::Bus(bool is_cgb)
     : ram(is_cgb ? 0x8000 : 0x2000), Vram(is_cgb ? 0x4000 : 0x2000),
-      Oam(0x0100), io(0x0080), hram(0x0080), dma(this), apu() {
+      Oam(0x0100), io(0x0080), hram(0x0080), Cram(is_cgb ? 0x0080 : 0x0001),
+      dma(this), apu() {
 
   this->CGB = is_cgb;
   this->write(is_cgb ? 0x00 : 0x04, 0xFF4C);
@@ -15,6 +16,11 @@ Bus::Bus(bool is_cgb)
   this->tac = this->io.get_address(0x07);
   this->div = this->io.get_address(0x04);
   this->IF = this->io.get_address(0x0F);
+
+  this->BGPI = this->io.get_address(0x68);
+  this->BGPD = this->io.get_address(0x69);
+  this->OBPI = this->io.get_address(0x6A);
+  this->OBPD = this->io.get_address(0x6B);
 
   *div = 0x18;
   *tac = 0xF8;
@@ -90,6 +96,16 @@ void Bus::write(uint8_t data, uint16_t address) {
       return;
     }
     this->io.write(data, address - 0xFF00);
+    if (CGB) {
+      if (address == 0xFF69) {
+        this->write_bg_cram(data);
+        return;
+      }
+      if (address == 0xFF6B) {
+        this->write_ob_cram(data);
+        return;
+      }
+    }
     if (address == 0xFF46) {
       this->dma.dma_start(data);
     }
@@ -172,6 +188,22 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
   }
 
   return 0x00;
+}
+
+void Bus::write_bg_cram(uint8_t data) {
+  uint8_t address = *BGPI & 0x3F;
+  this->Cram.write(data, address);
+  if (address & 0x80) {
+    *BGPI = (*BGPI + 0x01) & 0xBF;
+  }
+}
+
+void Bus::write_ob_cram(uint8_t data) {
+  uint8_t address = *OBPI & 0x3F;
+  this->Cram.write(data, address + 0x40);
+  if (address & 0x80) {
+    *OBPI = (*OBPI + 0x01) & 0xBF;
+  }
 }
 
 uint8_t *Bus::get_address(uint16_t address) {
