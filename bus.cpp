@@ -7,6 +7,7 @@ Bus::Bus(bool is_cgb)
       Oam(0x0100), io(0x0080), hram(0x0080), dma(this), apu() {
 
   this->CGB = is_cgb;
+  this->write(is_cgb ? 0x00 : 0x04, 0xFF4C);
 
   this->write(0xff, 0xFF00);
   this->tima = this->io.get_address(0x05);
@@ -41,13 +42,26 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->rom->write(address, data);
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
+    if (CGB && address > 0xCFFF) {
+      uint8_t RBANK = 0x00;
+      RBANK = read(0xFF70) & 0x07;
+      if (RBANK == 0)
+        RBANK = 0x01;
+      this->ram.write(data, address - 0xC000 + (RBANK * 0x1000));
+      return;
+    }
     this->ram.write(data, address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
     if ((this->read(0xFF40) & 0x80) == 0x80 &&
         (this->read(0xFF41) & 0x03) == 0x03)
       return;
-    this->Vram.write(data, address - 0x8000);
+    uint8_t VBANK = 0x00;
+    // If cgb check video bank
+    if (CGB) {
+      VBANK = read(0xFF4F) & 0x01;
+    }
+    this->Vram.write(data, address - 0x8000 + (VBANK * 0x2000));
   }
   if (address >= 0xA000 && address <= 0xBFFF) {
     this->rom->write(address, data);
@@ -118,6 +132,13 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     return this->rom->read(address);
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
+    if (CGB && address > 0xCFFF) {
+      uint8_t RBANK = 0x00;
+      RBANK = read(0xFF70) & 0x07;
+      if (RBANK == 0)
+        RBANK = 0x01;
+      return this->ram.read(address - 0xC000 + (RBANK * 0x1000));
+    }
     return this->ram.read(address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
@@ -125,7 +146,11 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     if ((this->read(0xFF40) & 0x80) == 0x80 &&
         (this->read(0xFF41) & 0x03) == 0x03 && is_cpu)
       return 0xFF;
-    return this->Vram.read(address - 0x8000);
+    uint8_t VBANK = 0x00;
+    if (CGB) {
+      VBANK = read(0xFF4F) & 0x01;
+    }
+    return this->Vram.read(address - 0x8000 + (VBANK * 0x2000));
   }
   if (address >= 0xA000 && address <= 0xBFFF) {
     return this->rom->read(address);
@@ -154,10 +179,21 @@ uint8_t *Bus::get_address(uint16_t address) {
     return nullptr;
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
+    if (CGB && address > 0xCFFF) {
+      uint8_t RBANK = 0x00;
+      RBANK = read(0xFF70) & 0x07;
+      if (RBANK == 0)
+        RBANK = 0x01;
+      return this->ram.get_address(address - 0xC000 + (RBANK * 0x1000));
+    }
     return this->ram.get_address(address - 0xC000);
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
-    return this->Vram.get_address(address - 0x8000);
+    uint8_t VBANK = 0x00;
+    if (CGB) {
+      VBANK = read(0xFF4F) & 0x01;
+    }
+    return this->Vram.get_address(address - 0x8000 + (VBANK * 0x2000));
   }
   if (address >= 0xFE00 && address <= 0xFE9F) {
     return this->Oam.get_address(address - 0xFE00);
