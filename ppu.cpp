@@ -49,7 +49,6 @@ void Ppu::oamSearch() {
 }
 
 void Ppu::pixelTransfer() {
-
   if (this->state != Pixeltransfer) {
     this->state = Pixeltransfer;
 
@@ -57,6 +56,7 @@ void Ppu::pixelTransfer() {
     act_obj_index = 0;
   }
   obj = nullptr;
+  bg_attributes = 0x00;
   pixel_to_draw = 0;
   uint8_t obj_act_pixel = 0;
   if ((*LCDC & 0x02) == 0x02) {
@@ -200,8 +200,9 @@ uint8_t Ppu::getBgPixel() {
   uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
   uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
 
-  uint8_t bg_pixel_index =
-      bus->read(background_area + (32 * (bg_y % 32)) + (bg_x % 32));
+  uint16_t map_address = background_area + (32 * (bg_y % 32)) + (bg_x % 32);
+
+  uint8_t bg_pixel_index = bus->read(map_address);
 
   uint16_t tile_data_address;
   if (tile_data_area == 0x8000) {
@@ -211,12 +212,35 @@ uint8_t Ppu::getBgPixel() {
     tile_data_address = 0x9000 + signed_index * 16;
   }
 
-  uint8_t bg_pixel_low = bus->read(tile_data_address + 2 * ((*SCY + *LY) % 8));
-  uint8_t bg_pixel_high =
-      bus->read(tile_data_address + 2 * ((*SCY + *LY) % 8) + 0x0001);
+  uint8_t bg_pixel_low;
+  uint8_t bg_pixel_high;
+  uint8_t bank = 0x00;
+  uint8_t x_flip_value = 7;
+  if (CGB) {
+    bg_attributes = bus->Vram.read(map_address - 0x8000 + 0x2000);
+    bank = (bg_attributes >> 3) & 0x01;
 
-  uint8_t bg_pixel = ((bg_pixel_high >> (7 - ((*SCX + lx) % 8))) & 0x01) << 1 |
-                     ((bg_pixel_low >> (7 - ((*SCX + lx) % 8))) & 0x01);
+    // is y flip?
+    uint8_t row =
+        (bg_attributes & 0x40) ? (7 - (*SCY + *LY)) % 8 : (*SCY + *LY) % 8;
+
+    bg_pixel_low = bus->Vram.read((tile_data_address + 2 * row) - 0x8000 +
+                                  (bank * 0x2000));
+    bg_pixel_high = bus->Vram.read((tile_data_address + 2 * row + 0x0001) -
+                                   0x8000 + (bank * 0x2000));
+
+    x_flip_value = (bg_attributes & 0x20) ? 0 : 7;
+
+  } else {
+    bg_pixel_low =
+        bus->Vram.read((tile_data_address + 2 * ((*SCY + *LY) % 8)) - 0x8000);
+    bg_pixel_high = bus->Vram.read(
+        (tile_data_address + 2 * ((*SCY + *LY) % 8) + 0x0001) - 0x8000);
+  }
+
+  uint8_t bg_pixel =
+      ((bg_pixel_high >> (x_flip_value - ((*SCX + lx) % 8))) & 0x01) << 1 |
+      ((bg_pixel_low >> (x_flip_value - ((*SCX + lx) % 8))) & 0x01);
 
   return bg_pixel;
 
@@ -261,6 +285,8 @@ void Ppu::vBlank() {
 
 void Ppu::connectBus(Bus *bus) {
   this->bus = bus;
+  this->CGB = bus->CGB;
+
   this->LCDC = bus->io.get_address(0x40);
   *LCDC = 0x91;
   this->STAT = bus->io.get_address(0x41);
@@ -270,9 +296,13 @@ void Ppu::connectBus(Bus *bus) {
   this->LY = bus->io.get_address(0x44);
   this->LYC = bus->io.get_address(0x45);
   this->DMA = bus->io.get_address(0x46);
+
   this->BGP = bus->io.get_address(0x47);
   this->OBP0 = bus->io.get_address(0x48);
   this->OBP1 = bus->io.get_address(0x49);
+  this->BGPI = bus->io.get_address(0x68);
+  this->OBPI = bus->io.get_address(0x6A);
+
   this->WY = bus->io.get_address(0x4A);
   this->WX = bus->io.get_address(0x4B);
 

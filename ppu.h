@@ -16,6 +16,7 @@ class Ppu {
   };
 
   PpuState state;
+  bool CGB = false;
   bool ppu_was_on;
 
   uint8_t *LCDC;
@@ -25,9 +26,14 @@ class Ppu {
   uint8_t *LY;
   uint8_t *LYC;
   uint8_t *DMA;
+
   uint8_t *BGP;
   uint8_t *OBP0;
   uint8_t *OBP1;
+
+  uint8_t *BGPI;
+  uint8_t *OBPI;
+
   uint8_t *WY;
   uint8_t *WX;
 
@@ -44,6 +50,8 @@ class Ppu {
 
   object_type *objects[10];
   object_type *obj = nullptr;
+
+  uint8_t bg_attributes = 0x00;
 
   uint8_t pixel_to_draw = 0;
 

@@ -181,10 +181,11 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     /*if (address == 0xFF44) {
       return 0x90;
     }*/
-    if (address == 0xFF69) {
+
+    if (address == 0xFF69 && CGB) {
       return this->read_bg_cram();
     }
-    if (address == 0xFF6B) {
+    if (address == 0xFF6B && CGB) {
       return this->read_ob_cram();
     }
     return this->io.read(address - 0xFF00);
