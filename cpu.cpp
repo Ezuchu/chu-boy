@@ -279,6 +279,7 @@ void Cpu::connectBus(Bus *bus) {
   Cpu::bus = bus;
   IE = bus->get_address(0xFFFF);
   IF = bus->get_address(0xFF0F);
+  KEY1 = bus->get_address(0xFF4D);
   // print_state();
 }
 
@@ -450,24 +451,30 @@ void Cpu::push_to_interrupt(uint16_t address) {
 }
 
 void Cpu::step() {
-  if ((*IE & *IF & 0x1F) != 0) {
-    if (IME != false) {
-      handle_interrupt();
-      return;
-    }
-    is_halted = false;
+  if (stop_flag) {
+    uint8_t input = read(0xFF00);
+    stop_flag = (input & 0x0F) != 0xFF ? false : true;
   }
-  if (!is_halted) {
-    fetch_instruction();
-    execute_mode();
-    execute_instruction();
-
-    // Enable IME if pending from EI
-    if (IME_pending && opcode != 0xFB) {
-      IME = true;
-      IME_pending = false;
+  if (!stop_flag) {
+    if ((*IE & *IF & 0x1F) != 0) {
+      if (IME != false) {
+        handle_interrupt();
+        return;
+      }
+      is_halted = false;
     }
-    // print_state();
+    if (!is_halted) {
+      fetch_instruction();
+      execute_mode();
+      execute_instruction();
+
+      // Enable IME if pending from EI
+      if (IME_pending && opcode != 0xFB) {
+        IME = true;
+        IME_pending = false;
+      }
+      // print_state();
+    }
   }
 }
 
@@ -682,7 +689,36 @@ void Cpu::AM_HL_SP_S8() {
 // Instruction implementations
 void Cpu::NOP() {}
 
-void Cpu::STOP() {}
+void Cpu::STOP() {
+  // A button is pressed?
+  if ((read(0xFF00) & 0x0F) != 0x0F) {
+    if (!((*IE & *IF) != 0)) {
+      pc++;
+      is_halted = true;
+    }
+  } else {
+    if (*KEY1 & 0x01) {
+      if ((*IE & *IF) != 0) {
+        if (IME) {
+          // reset DIV
+          write(0, 0xFF04);
+        }
+      } else {
+        pc++;
+        is_halted = true;
+        // reset DIV
+        write(0, 0xFF04);
+      }
+      speed_mode = (*KEY1 >> 7) & 0x01;
+    } else {
+      if (!((*IE & *IF) != 0)) {
+        pc++;
+      }
+      write(0, 0xFF04);
+      stop_flag = true;
+    }
+  }
+}
 
 void Cpu::HALT() {
   if (IME == false) {

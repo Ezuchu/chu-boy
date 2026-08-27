@@ -47,10 +47,12 @@ private:
   bool is_halted = false;
   bool IME = false;
   bool IME_pending = false;
-  uint8_t *IE = nullptr;
-  uint8_t *IF = nullptr;
+
   bool halt_bug = false;
 
+  uint8_t *IE = nullptr;
+  uint8_t *IF = nullptr;
+  uint8_t *KEY1 = nullptr;
   Bus *bus = nullptr;
 
   std::array<instruction, 256> op_table;
@@ -156,6 +158,8 @@ private:
   void CCF();
 
 public:
+  bool speed_mode = false;
+  bool stop_flag = false;
   Cpu();
 
   ~Cpu();

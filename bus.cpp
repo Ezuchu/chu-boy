@@ -3,8 +3,8 @@
 #include <cstdint>
 
 Bus::Bus(bool is_cgb)
-    : ram(0x4000), Vram(0x4000), Oam(0x0100), io(0x0080), hram(0x0080),
-      dma(this), apu() {
+    : ram(is_cgb ? 0x8000 : 0x2000), Vram(is_cgb ? 0x4000 : 0x2000),
+      Oam(0x0100), io(0x0080), hram(0x0080), dma(this), apu() {
 
   this->CGB = is_cgb;
 
@@ -173,6 +173,10 @@ uint8_t *Bus::get_address(uint16_t address) {
 }
 
 void Bus::clock() {
+  if (this->cpu.stop_flag) {
+    this->cpu.step();
+    return;
+  }
   this->cpu.step();
   this->dma.dma_step();
   this->apu.step(1);
