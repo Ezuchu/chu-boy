@@ -88,11 +88,13 @@ void Ppu::pixelTransfer() {
 
   uint8_t bg_pixel = 0;
 
-  // window enable in range?
-  if (*LCDC & 0x20 && lx >= (int)(*WX - 7) && *LY >= *WY) {
-    bg_pixel = getWinPixel();
-  } else {
-    bg_pixel = getBgPixel();
+  if (*LCDC & 0x01) {
+    // window enable in range?
+    if ((*LCDC & 0x20) && lx >= (int)(*WX - 7) && *LY >= *WY) {
+      bg_pixel = getWinPixel();
+    } else {
+      bg_pixel = getBgPixel();
+    }
   }
 
   if (obj_act_pixel == 0 || ((obj->flags & 0x80) == 0x80) && bg_pixel != 0) {

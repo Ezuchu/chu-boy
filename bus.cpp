@@ -179,8 +179,8 @@ void Bus::clock() {
   }
   this->cpu.step();
   this->dma.dma_step();
-  this->apu.step(1);
-  this->ppu.step(4);
+  this->apu.step(this->cpu.speed_mode ? 2 : 4);
+  this->ppu.step(this->cpu.speed_mode ? 2 : 4);
 
   this->div_counter += 1;
   if (div_counter == 64) {
@@ -193,8 +193,8 @@ void Bus::clock() {
 void Bus::clock(uint8_t cycles) {
   for (int i = 0; i < cycles; i++) {
     this->dma.dma_step();
-    this->apu.step(1);
-    this->ppu.step(4);
+    this->apu.step(this->cpu.speed_mode ? 2 : 4);
+    this->ppu.step(this->cpu.speed_mode ? 2 : 4);
 
     this->div_counter += 1;
     if (this->div_counter == 64) {

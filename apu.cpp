@@ -42,10 +42,11 @@ void Apu::connectBus(Bus *bus) {
   update_channel_reg4();
 }
 
-void Apu::step(uint8_t cycles) {
+void Apu::step(uint8_t t_cycles) {
   if ((*audio_master & 0x80) == 0) {
     return;
   }
+  uint8_t cycles = t_cycles / 4;
   this->delta = (1.0f / 1048576.0f) * cycles;
   this->elapsed_time += delta;
   handle_pulse1();
