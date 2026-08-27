@@ -62,6 +62,9 @@ public:
   void write_bg_cram(uint8_t data);
   void write_ob_cram(uint8_t data);
 
+  uint8_t read_bg_cram();
+  uint8_t read_ob_cram();
+
   void timer_clock(uint8_t cycles);
 
   void frame_completed();

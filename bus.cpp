@@ -181,6 +181,12 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     /*if (address == 0xFF44) {
       return 0x90;
     }*/
+    if (address == 0xFF69) {
+      return this->read_bg_cram();
+    }
+    if (address == 0xFF6B) {
+      return this->read_ob_cram();
+    }
     return this->io.read(address - 0xFF00);
   }
   if (address >= 0xFF80 && address <= 0xFFFF) {
@@ -193,7 +199,7 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
 void Bus::write_bg_cram(uint8_t data) {
   uint8_t address = *BGPI & 0x3F;
   this->Cram.write(data, address);
-  if (address & 0x80) {
+  if (*BGPI & 0x80) {
     *BGPI = (*BGPI + 0x01) & 0xBF;
   }
 }
@@ -201,9 +207,25 @@ void Bus::write_bg_cram(uint8_t data) {
 void Bus::write_ob_cram(uint8_t data) {
   uint8_t address = *OBPI & 0x3F;
   this->Cram.write(data, address + 0x40);
-  if (address & 0x80) {
+  if (*OBPI & 0x80) {
     *OBPI = (*OBPI + 0x01) & 0xBF;
   }
+}
+
+uint8_t Bus::read_bg_cram() {
+  uint8_t address = *BGPI & 0x3F;
+  if (*BGPI & 0x80) {
+    *BGPI = (*BGPI + 0x01) & 0xBF;
+  }
+  return this->Cram.read(address);
+}
+
+uint8_t Bus::read_ob_cram() {
+  uint8_t address = *OBPI & 0x3F;
+  if (*OBPI & 0x80) {
+    *OBPI = (*OBPI + 0x01) & 0xBF;
+  }
+  return this->Cram.read(address + 0x40);
 }
 
 uint8_t *Bus::get_address(uint16_t address) {
