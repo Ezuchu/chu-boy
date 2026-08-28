@@ -88,7 +88,7 @@ void Ppu::pixelTransfer() {
 
   uint8_t bg_pixel = 0;
 
-  if (*LCDC & 0x01) {
+  if (*LCDC & 0x01 || (CGB && (obj == nullptr || obj_act_pixel == 0))) {
     // window enable in range?
     if ((*LCDC & 0x20) && lx >= (int)(*WX - 7) && *LY >= *WY) {
       bg_pixel = getWinPixel();
@@ -98,9 +98,9 @@ void Ppu::pixelTransfer() {
   }
 
   if (CGB) {
-    if ((obj_act_pixel == 0 || ((bg_attributes & 0x80) == 0x80) ||
-         ((obj->flags & 0x80) == 0x80)) &&
-        bg_pixel != 0) {
+    if ((bg_pixel != 0 || obj == nullptr) &&
+        (obj_act_pixel == 0 || (bg_attributes & 0x80) == 0x80 ||
+         obj == nullptr || (obj->flags & 0x80) == 0x80)) {
 
       uint8_t palette_index = (bg_attributes & 0x07);
       uint8_t color_address = ((palette_index * 8) + (2 * bg_pixel)) & 0x3F;

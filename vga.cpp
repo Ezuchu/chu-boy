@@ -22,7 +22,7 @@ void Vga::push_pixel_color(uint16_t pixel, uint8_t x, uint8_t y) {
   green = (green << 3) | (green >> 2);
   blue = (blue << 3) | (blue >> 2);
 
-  buffer[(y * 160) + x] = (0xFF000000) | (red << 16) | (green << 8) | blue;
+  buffer[(y * 160) + x] = (0xFF << 24) | (red << 16) | (green << 8) | blue;
 }
 
 void Vga::clear_buffer() {
