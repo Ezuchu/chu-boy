@@ -27,7 +27,7 @@ void Vga::push_pixel_color(uint16_t pixel, uint8_t x, uint8_t y) {
 
 void Vga::clear_buffer() {
   for (int i = 0; i < 160 * 144; i++) {
-    buffer[i] = 0;
+    buffer[i] = 0xFFFFFFFF;
   }
 }
 
