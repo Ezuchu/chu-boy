@@ -114,19 +114,21 @@ void Ppu::pixelTransfer() {
                 << (int)color_address << std::endl;*/
       this->vga->push_pixel_color(bg_color, lx, *LY);
       return;
-    } else {
-      return;
+    } else if (obj != nullptr) {
+      uint8_t palette_index = obj->flags & 0x07;
+      uint8_t color_address =
+          ((palette_index * 8) + (2 * obj_act_pixel)) & 0x3F;
+      *OBPI = (*OBPI & ~(0x3F)) | color_address;
+      uint8_t low_color = bus->read_ob_cram();
+      *OBPI = (*OBPI & ~(0x3F)) | (color_address + 1);
+      uint8_t high_color = bus->read_ob_cram();
+      uint16_t obj_color = (high_color << 8) | low_color;
 
-      uint8_t final_color;
-      if ((obj->flags & 0x10) == 0x10) {
-        final_color = (*OBP1 >> (obj_act_pixel * 2)) & 0x03;
-      } else {
-        final_color = (*OBP0 >> (obj_act_pixel * 2)) & 0x03;
-      }
-      this->vga->push_pixel(final_color, lx, *LY);
+      this->vga->push_pixel_color(obj_color, lx, *LY);
 
       return;
     }
+    return;
   }
 
   if (obj_act_pixel == 0 || ((obj->flags & 0x80) == 0x80) && bg_pixel != 0) {
@@ -170,8 +172,12 @@ uint8_t Ppu::getObjPixel(object_type *obj) {
 
   uint16_t tile_data_address = 0x8000 + (uint16_t)(16 * obj_tile);
 
-  uint8_t obj_pixel_low = bus->read(tile_data_address + (2 * row));
-  uint8_t obj_pixel_high = bus->read(tile_data_address + (2 * row) + 0x0001);
+  uint8_t bank = CGB ? (obj_flags >> 3) & 0x01 : 0x00;
+
+  uint8_t obj_pixel_low =
+      bus->Vram.read(tile_data_address + (2 * row) - 0x8000 + (bank * 0x2000));
+  uint8_t obj_pixel_high = bus->Vram.read(tile_data_address + (2 * row) +
+                                          0x0001 - 0x8000 + (bank * 0x2000));
 
   int pixel_num = x_flip ? obj_x : 7 - obj_x;
 
@@ -283,8 +289,8 @@ uint8_t Ppu::getBgPixel() {
     bank = (bg_attributes >> 3) & 0x01;
 
     // is y flip?
-    int row = (bg_attributes & 0x40) != 0 ? 7 - ((*SCY + *LY) % 8)
-                                          : ((*SCY + *LY) % 8);
+    int row =
+        (bg_attributes & 0x40) ? 7 - ((*SCY + *LY) % 8) : ((*SCY + *LY) % 8);
 
     bg_pixel_low = bus->Vram.read((tile_data_address + 2 * row) - 0x8000 +
                                   (bank * 0x2000));
