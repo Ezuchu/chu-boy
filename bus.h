@@ -30,7 +30,9 @@ public:
   Vga *vga = nullptr;
   DMA dma;
 
-  bool CGB = false;
+  int CGB = 0;
+
+  int reset_to_dmg_flag = 0;
 
   uint8_t *tima = nullptr;
   uint8_t *tma = nullptr;

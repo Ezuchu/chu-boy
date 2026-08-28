@@ -11,4 +11,5 @@ public:
   uint8_t read(uint16_t address);
   void write(uint8_t data, uint16_t address);
   uint8_t *get_address(uint16_t address);
+  void reset();
 };

@@ -16,7 +16,6 @@ class Ppu {
   };
 
   PpuState state;
-  bool CGB = false;
   bool ppu_was_on;
 
   uint8_t *LCDC;
@@ -71,11 +70,14 @@ class Ppu {
   void vBlank();
 
 public:
+  bool CGB = false;
   Ppu();
   ~Ppu();
 
   void connectBus(Bus *bus);
   void connectVga(Vga *vga);
+
+  void restartToDMG();
 
   void step(uint8_t cycles);
 };

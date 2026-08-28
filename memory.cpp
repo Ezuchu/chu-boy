@@ -1,4 +1,6 @@
 #include "memory.h"
+#include <cstring>
+#include <iostream>
 
 Memory::Memory(uint16_t size) {
   this->data = new uint8_t[size];
@@ -18,3 +20,8 @@ void Memory::write(uint8_t data, uint16_t address) {
 }
 
 uint8_t *Memory::get_address(uint16_t address) { return &this->data[address]; }
+
+void Memory::reset() {
+  memset(this->data, 0, size);
+  std::cout << "mem reset" << std::endl;
+}

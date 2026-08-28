@@ -379,6 +379,36 @@ void Ppu::connectBus(Bus *bus) {
   this->IE = bus->get_address(0xFFFF);
 }
 
+// restart the ppu without cgb mode
+void Ppu::restartToDMG() {
+  this->CGB = false;
+  *LCDC = 0x91;
+  *STAT = 0x85;
+  *SCY = 0x00;
+  *SCX = 0x00;
+  *LY = 0;
+  *LYC = 0;
+  *DMA = 0x00;
+
+  *BGP = 0xFC;
+  *OBP0 = 0xFF;
+  *OBP1 = 0xFF;
+  *BGPI = 0x00;
+  *OBPI = 0x00;
+
+  *WY = 0x00;
+  *WX = 0x00;
+
+  *IF = 0x00;
+  *IE = 0x00;
+
+  this->cycle_counter = 0;
+  this->act_cycles = 0;
+  this->lx = 0;
+  this->obj_index = 0;
+  this->act_obj_index = 0;
+}
+
 void Ppu::connectVga(Vga *vga) { this->vga = vga; }
 
 void Ppu::handle_enable_disable() {}

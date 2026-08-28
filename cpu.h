@@ -158,6 +158,7 @@ private:
   void CCF();
 
 public:
+  bool CGB = false;
   bool speed_mode = false;
   bool stop_flag = false;
   Cpu();
@@ -165,6 +166,7 @@ public:
   ~Cpu();
 
   void connectBus(Bus *bus);
+  void restartToDMG();
   void step();
   void print_state();
 };

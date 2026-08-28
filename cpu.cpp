@@ -287,10 +287,27 @@ void Cpu::connectBus(Bus *bus) {
     this->de = {0xFF56};
     this->hl = {0x000D};
     this->sp = {0xFFFE};
-    this->pc = {0x0100};
+    this->pc = {0x0000};
+    CGB = true;
   }
 
   // print_state();
+}
+
+// restart cpu to dmg mode
+void Cpu::restartToDMG() {
+  this->af = {0x01B0};
+  this->bc = {0x0013};
+  this->de = {0x00D8};
+  this->hl = {0x014D};
+  this->sp = {0xFFFE};
+  this->pc = {0x0100};
+  this->CGB = false;
+  this->speed_mode = false;
+  this->stop_flag = false;
+  this->halt_bug = false;
+  this->IME = false;
+  this->IME_pending = false;
 }
 
 void Cpu::fetch_instruction() {

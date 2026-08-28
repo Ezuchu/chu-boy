@@ -3,12 +3,12 @@
 #include <cstdint>
 
 Bus::Bus(bool is_cgb)
-    : ram(is_cgb ? 0x8000 : 0x2000), Vram(is_cgb ? 0x4000 : 0x2000),
-      Oam(0x0100), io(0x0080), hram(0x0080), Cram(is_cgb ? 0x0080 : 0x0001),
-      dma(this), apu() {
+    : ram(is_cgb != 0 ? 0x8000 : 0x2000), Vram(is_cgb != 0 ? 0x4000 : 0x2000),
+      Oam(0x0100), io(0x0080), hram(0x0080),
+      Cram(is_cgb != 0 ? 0x0080 : 0x0001), dma(this), apu() {
 
-  this->CGB = is_cgb;
-  this->write(is_cgb ? 0x00 : 0x04, 0xFF4C);
+  this->CGB = is_cgb != 0 ? 1 : 0;
+  // this->write((CGB == 1 ? 0x00 : 0x04), 0xFF4C);
 
   this->write(0xff, 0xFF00);
   this->tima = this->io.get_address(0x05);
@@ -105,6 +105,13 @@ void Bus::write(uint8_t data, uint16_t address) {
         this->write_ob_cram(data);
         return;
       }
+      if (address == 0xFF4C) {
+        std::cout << "CGB: " << (int)(data) << std::endl;
+        if (data != 0 && CGB != 0) {
+          reset_to_dmg_flag = 1;
+        }
+        return;
+      }
     }
     if (address == 0xFF46) {
       this->dma.dma_start(data);
@@ -188,6 +195,14 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     if (address == 0xFF6B && CGB) {
       return this->read_ob_cram();
     }
+    if (address == 0xFF4C) {
+      this->CGB = (this->io.read(0xFF4C - 0xFF00) >> 2) & 0x01;
+      std::cout << "CGB: " << (int)CGB << std::endl;
+      if (!CGB) {
+        this->ppu.CGB = false;
+        this->cpu.CGB = false;
+      }
+    }
     return this->io.read(address - 0xFF00);
   }
   if (address >= 0xFF80 && address <= 0xFFFF) {
@@ -264,6 +279,32 @@ uint8_t *Bus::get_address(uint16_t address) {
 }
 
 void Bus::clock() {
+  if (this->reset_to_dmg_flag) {
+    this->CGB = 0;
+    this->cpu.CGB = 0;
+    this->ppu.CGB = 0;
+
+    this->ram.reset();
+    this->Vram.reset();
+    this->Oam.reset();
+    this->Cram.reset();
+    this->io.reset();
+    this->hram.reset();
+
+    this->ppu.restartToDMG();
+    this->cpu.restartToDMG();
+
+    *div = 0x18;
+    *tac = 0xF8;
+    *tma = 0x00;
+    *tima = 0x00;
+    *IF = 0x00;
+
+    this->timer_counter = 0;
+    this->div_counter = 0;
+
+    this->reset_to_dmg_flag = 0;
+  }
   if (this->cpu.stop_flag) {
     this->cpu.step();
     return;
