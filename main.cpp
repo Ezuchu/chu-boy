@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
                             SDL_SCANCODE_I, SDL_SCANCODE_W, SDL_SCANCODE_S,
                             SDL_SCANCODE_A, SDL_SCANCODE_D};
 
-  bool CGB = (cart->cgb_flag != 0x00) ? true : false;
+  bool CGB = (cart->cgb_flag) != 0x00 ? true : false;
   Bus *bus = new Bus(CGB);
   bus->rom = mbc;
   bus->cpu = Cpu();

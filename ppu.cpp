@@ -97,6 +97,38 @@ void Ppu::pixelTransfer() {
     }
   }
 
+  if (CGB) {
+    if ((obj_act_pixel == 0 || ((bg_attributes & 0x80) == 0x80) ||
+         ((obj->flags & 0x80) == 0x80)) &&
+        bg_pixel != 0) {
+
+      uint8_t palette_index = (bg_attributes & 0x07);
+      uint8_t color_address = ((palette_index * 8) + (2 * bg_pixel)) & 0x3F;
+
+      *BGPI = (*BGPI & ~(0x3F)) | color_address;
+      uint8_t low_color = bus->read_bg_cram();
+      *BGPI = (*BGPI & ~(0x3F)) | (color_address + 1);
+      uint8_t high_color = bus->read_bg_cram();
+      uint16_t bg_color = (high_color << 8) | low_color;
+      /*std::cout << std::hex << (int)(2 * bg_pixel) << " " << std::hex
+                << (int)color_address << std::endl;*/
+      this->vga->push_pixel_color(bg_color, lx, *LY);
+      return;
+    } else {
+      return;
+
+      uint8_t final_color;
+      if ((obj->flags & 0x10) == 0x10) {
+        final_color = (*OBP1 >> (obj_act_pixel * 2)) & 0x03;
+      } else {
+        final_color = (*OBP0 >> (obj_act_pixel * 2)) & 0x03;
+      }
+      this->vga->push_pixel(final_color, lx, *LY);
+
+      return;
+    }
+  }
+
   if (obj_act_pixel == 0 || ((obj->flags & 0x80) == 0x80) && bg_pixel != 0) {
     uint8_t bg_color = (*BGP >> (bg_pixel * 2)) & 0x03;
     this->vga->push_pixel(bg_color, lx, *LY);
@@ -239,8 +271,8 @@ uint8_t Ppu::getBgPixel() {
   }
 
   uint8_t bg_pixel =
-      ((bg_pixel_high >> (x_flip_value - ((*SCX + lx) % 8))) & 0x01) << 1 |
-      ((bg_pixel_low >> (x_flip_value - ((*SCX + lx) % 8))) & 0x01);
+      ((bg_pixel_high >> ((x_flip_value - (*SCX + lx)) % 8)) & 0x01) << 1 |
+      ((bg_pixel_low >> ((x_flip_value - (*SCX + lx)) % 8)) & 0x01);
 
   return bg_pixel;
 

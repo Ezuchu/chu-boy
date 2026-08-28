@@ -41,7 +41,7 @@ Cartridge::Cartridge(std::string rom_name) {
 
 void Cartridge::output_rom_data() {
   std::cout << "Game Title: " << this->game_title << std::endl;
-  std::cout << "CGB Flag: " << (int)this->cgb_flag << std::endl;
+  std::cout << "CGB Flag: " << std::hex << (int)this->cgb_flag << std::endl;
   std::cout << "License: " << this->license << std::endl;
   std::cout << "Cartridge Type: " << (int)this->cartridge_type << std::endl;
   std::cout << "ROM Size: " << (int)this->rom_size << std::endl;

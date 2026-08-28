@@ -280,6 +280,16 @@ void Cpu::connectBus(Bus *bus) {
   IE = bus->get_address(0xFFFF);
   IF = bus->get_address(0xFF0F);
   KEY1 = bus->get_address(0xFF4D);
+
+  if (bus->CGB) {
+    this->af = {0x1180};
+    this->bc = {0x0000};
+    this->de = {0xFF56};
+    this->hl = {0x000D};
+    this->sp = {0xFFFE};
+    this->pc = {0x0100};
+  }
+
   // print_state();
 }
 

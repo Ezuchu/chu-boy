@@ -15,6 +15,7 @@ public:
   ~Vga();
 
   void push_pixel(uint8_t pixel, uint8_t x, uint8_t y);
+  void push_pixel_color(uint16_t pixel, uint8_t x, uint8_t y);
   void clear_buffer();
   void render();
 };
