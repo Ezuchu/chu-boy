@@ -18,10 +18,10 @@ void Ppu::oamSearch() {
     }*/
 
     *STAT = (*STAT & 0xFC) | 0x02;
-  }
-  if ((*STAT & 0x20) == 0x20) {
-    // request interrupt
-    *IF |= 0x02;
+    if ((*STAT & 0x20) == 0x20) {
+      // request interrupt
+      *IF |= 0x02;
+    }
   }
 
   uint8_t up_limit;
@@ -327,11 +327,11 @@ void Ppu::hBlank() {
 
     // request interrupt
     //*IF |= 0x02;
-  }
-  if ((*STAT & 0x08) == 0x08) {
-    // request interrupt
+    if ((*STAT & 0x08) == 0x08) {
+      // request interrupt
 
-    *IF |= 0x02;
+      *IF |= 0x02;
+    }
   }
 }
 
@@ -345,10 +345,10 @@ void Ppu::vBlank() {
 
     // request interrupt
     *IF |= 0x01;
-  }
-  if ((*STAT & 0x10) == 0x10) {
+    if ((*STAT & 0x10) == 0x10) {
 
-    *IF |= 0x02;
+      *IF |= 0x02;
+    }
   }
 }
 
