@@ -5,7 +5,7 @@
 Bus::Bus(bool is_cgb)
     : ram(is_cgb != 0 ? 0x8000 : 0x2000), Vram(is_cgb != 0 ? 0x4000 : 0x2000),
       Oam(0x0100), io(0x0080), hram(0x0080),
-      Cram(is_cgb != 0 ? 0x0080 : 0x0001), dma(this), apu() {
+      Cram(is_cgb != 0 ? 0x0080 : 0x0001), dma(this), vdma(this), apu() {
 
   this->CGB = is_cgb != 0 ? 1 : 0;
   // this->write((CGB == 1 ? 0x00 : 0x04), 0xFF4C);
@@ -111,6 +111,14 @@ void Bus::write(uint8_t data, uint16_t address) {
           reset_to_dmg_flag = 1;
         }
         return;
+      }
+      if (address == 0xFF55) {
+        uint8_t mode = (data & 0x80) >> 7;
+        uint8_t length = (data & 0x7F);
+        /*if (mode == 0) {
+          this->cpu.is_halted = true;
+        }*/
+        // this->vdma.vdma_start(mode, length);
       }
     }
     if (address == 0xFF46) {
@@ -309,6 +317,8 @@ void Bus::clock() {
     this->cpu.step();
     return;
   }
+
+  // this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
   this->cpu.step();
   this->dma.dma_step();
   this->apu.step(this->cpu.speed_mode ? 2 : 4);
@@ -324,6 +334,7 @@ void Bus::clock() {
 
 void Bus::clock(uint8_t cycles) {
   for (int i = 0; i < cycles; i++) {
+    // this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
     this->dma.dma_step();
     this->apu.step(this->cpu.speed_mode ? 2 : 4);
     this->ppu.step(this->cpu.speed_mode ? 2 : 4);

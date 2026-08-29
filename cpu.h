@@ -44,7 +44,6 @@ private:
 
   bool bit16 = false;
 
-  bool is_halted = false;
   bool IME = false;
   bool IME_pending = false;
 
@@ -161,6 +160,7 @@ public:
   bool CGB = false;
   bool speed_mode = false;
   bool stop_flag = false;
+  bool is_halted = false;
   Cpu();
 
   ~Cpu();

@@ -6,6 +6,7 @@
 #include "mbc.h"
 #include "memory.h"
 #include "ppu.h"
+#include "vdma.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,7 @@ public:
   rom_controller *rom = nullptr;
   Vga *vga = nullptr;
   DMA dma;
+  VDMA vdma;
 
   int CGB = 0;
 
