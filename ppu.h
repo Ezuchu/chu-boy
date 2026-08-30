@@ -69,6 +69,18 @@ class Ppu {
   void hBlank();
   void vBlank();
 
+  enum FetcherState {
+    FetchTileId,
+    FetchTileAttrs,
+    FetchLowByte,
+    FetchHighByte
+  };
+  FetcherState fetcher_state = FetchTileId;
+  int fetcher_cycles = 0;
+
+  uint8_t bg_pixel_buffer[8];
+  uint8_t buffer_index = 8;
+
 public:
   bool CGB = false;
   Ppu();

@@ -15,6 +15,13 @@ VDMA::VDMA(Bus *bus) {
 }
 
 void VDMA::vdma_start(uint8_t mode, uint8_t rlength) {
+  if (this->state != 0 && mode == 0) {
+    this->state = 0;
+    *this->hdma5 &= 0x7FFF;
+    this->bus->cpu.is_halted = false;
+    return;
+  }
+
   this->source_address =
       ((bus->read(0xFF51) << 8) | (bus->read(0xFF52))) & 0xFFF0;
   this->dest_address =
@@ -27,11 +34,22 @@ void VDMA::vdma_start(uint8_t mode, uint8_t rlength) {
   this->state = mode == 0 ? 1 : 2;
   this->bus->cpu.is_halted = state == 1 ? true : this->bus->cpu.is_halted;
   this->bytes_written = 0;
+  *this->hdma5 |= 0x80;
 }
 
 void VDMA::vdma_step(uint8_t bytes) {
   uint8_t act_bytes = bytes;
-  if (this->state == 1) {
+
+  if (this->state == 3) {
+    if ((bus->read(0xFF41) & 0x03) != 0) {
+      this->state = 2;
+    }
+    return;
+  }
+
+  if (this->state == 1 ||
+      (this->state == 2 && (bus->read(0xFF41) & 0x03) == 0)) {
+    bus->cpu.is_halted = true;
     while (bytes != 0) {
       uint8_t data = this->read();
       this->write(data);
@@ -41,6 +59,10 @@ void VDMA::vdma_step(uint8_t bytes) {
       bytes_written++;
       if ((bytes_written % 16) == 0) {
         *hdma5 -= 0x01;
+        if (this->state == 2 && (bus->read(0xFF41) & 0x03) == 0) {
+          this->state = 3;
+          bus->cpu.is_halted = false;
+        }
       }
       if (bytes_written >= length) {
         this->state = 0;
@@ -48,6 +70,10 @@ void VDMA::vdma_step(uint8_t bytes) {
         this->bus->cpu.is_halted = false;
         return;
       }
+    }
+  } else {
+    if (this->state == 2) {
+      bus->cpu.is_halted = false;
     }
   }
 }

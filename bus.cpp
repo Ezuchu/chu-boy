@@ -48,7 +48,7 @@ void Bus::write(uint8_t data, uint16_t address) {
     this->rom->write(address, data);
   }
   if (address >= 0xC000 && address <= 0xDFFF) {
-    if (CGB && address > 0xCFFF) {
+    if (CGB && (address > 0xCFFF)) {
       uint8_t RBANK = 0x00;
       RBANK = read(0xFF70) & 0x07;
       if (RBANK == 0)
@@ -115,10 +115,10 @@ void Bus::write(uint8_t data, uint16_t address) {
       if (address == 0xFF55) {
         uint8_t mode = (data & 0x80) >> 7;
         uint8_t length = (data & 0x7F);
-        /*if (mode == 0) {
+        if (mode == 0) {
           this->cpu.is_halted = true;
-        }*/
-        // this->vdma.vdma_start(mode, length);
+        }
+        this->vdma.vdma_start(mode, length);
       }
     }
     if (address == 0xFF46) {
@@ -318,7 +318,7 @@ void Bus::clock() {
     return;
   }
 
-  // this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
+  this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
   this->cpu.step();
   this->dma.dma_step();
   this->apu.step(this->cpu.speed_mode ? 2 : 4);
@@ -334,7 +334,7 @@ void Bus::clock() {
 
 void Bus::clock(uint8_t cycles) {
   for (int i = 0; i < cycles; i++) {
-    // this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
+    this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
     this->dma.dma_step();
     this->apu.step(this->cpu.speed_mode ? 2 : 4);
     this->ppu.step(this->cpu.speed_mode ? 2 : 4);

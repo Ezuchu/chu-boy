@@ -49,18 +49,28 @@ void Ppu::oamSearch() {
 }
 
 void Ppu::pixelTransfer() {
+  static int last_object = 0;
   if (this->state != Pixeltransfer) {
     this->state = Pixeltransfer;
 
     *STAT = (*STAT & 0xFC) | 0x03;
     act_obj_index = 0;
+
+    uint8_t penalty = *SCX % 8;
+    act_cycles -= penalty;
+    last_object = -1;
+    if (act_cycles <= 0) {
+      lx--;
+      return;
+    };
   }
   obj = nullptr;
   bg_attributes = 0x00;
   pixel_to_draw = 0;
   uint8_t obj_act_pixel = 0;
+  int act_obj_index = 0;
   if ((*LCDC & 0x02) == 0x02) {
-    for (uint8_t i = 0; i < obj_index; i++) {
+    for (int i = 0; i < obj_index; i++) {
       if (objects[i]->x > 0 && objects[i]->x < 176) {
         if (lx >= objects[i]->x - 8 && lx < objects[i]->x) {
           uint8_t obj_pixel = this->getObjPixel(objects[i]);
@@ -69,10 +79,12 @@ void Ppu::pixelTransfer() {
               if ((obj->flags & 0x80) < (objects[i]->flags & 0x80)) {
                 obj = objects[i];
                 obj_act_pixel = obj_pixel;
+                act_obj_index = i;
               }
             } else {
               obj = objects[i];
               obj_act_pixel = obj_pixel;
+              act_obj_index = i;
             }
           }
         }
@@ -115,6 +127,10 @@ void Ppu::pixelTransfer() {
       this->vga->push_pixel_color(bg_color, lx, *LY);
       return;
     } else if (obj != nullptr) {
+      if (act_obj_index != last_object) {
+        last_object = act_obj_index;
+        act_cycles -= 6;
+      }
       uint8_t palette_index = obj->flags & 0x07;
       uint8_t color_address =
           ((palette_index * 8) + (2 * obj_act_pixel)) & 0x3F;

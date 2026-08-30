@@ -58,7 +58,7 @@ void MBC_3::save_state() {
 void MBC_3::write(uint16_t address, uint8_t data) {
   static const int rom_ref[] = {0, 0x3, 0x7, 0xF, 0x1F, 0x3F, 0x7F};
   if (address <= 0x1FFF) {
-    if (data == 0xA) {
+    if ((data & 0x0A) == 0x0A) {
       ram_enable = true;
       if (clock) {
         rtc_enable = true;
