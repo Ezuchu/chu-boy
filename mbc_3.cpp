@@ -2,6 +2,8 @@
 #include <cstring>
 #include <ctime>
 
+const std::time_t BASE_TIME = 946684800;
+
 MBC_3::MBC_3(bool has_battery, bool has_clock) {
   this->battery = has_battery;
   this->clock = has_clock;
@@ -37,8 +39,19 @@ void MBC_3::load_cartridge(Cartridge *cart) {
                     ram_ref[this->ram_size]);
       if (clock) {
         rom_save.read(reinterpret_cast<char *>(rtc_regs), sizeof(rtc_regs));
-        update_rtc();
-        std::cout << "hola" << std::endl;
+        if (rom_save) {
+          rom_save.read(reinterpret_cast<char *>(&last_time_register),
+                        sizeof(uint32_t));
+        } else {
+          initialize_rtc();
+        }
+        std::cout << (int)rtc_regs[0] << " " << (int)rtc_regs[1] << " "
+                  << (int)rtc_regs[2] << " " << (int)rtc_regs[3] << " "
+                  << (int)rtc_regs[4] << std::endl;
+        /*update_rtc();
+        std::cout << (int)rtc_regs[0] << " " << (int)rtc_regs[1] << " "
+                  << (int)rtc_regs[2] << " " << (int)rtc_regs[3] << " "
+                  << (int)rtc_regs[4] << std::endl;*/
       }
 
       rom_save.close();
@@ -78,12 +91,13 @@ void MBC_3::initialize_rtc() {
 }
 
 void MBC_3::update_rtc() {
-  const std::time_t BASE_TIME = 946684800;
+
+  uint32_t diff = (std::time(0) - BASE_TIME) - last_time_register;
   last_time_register = std::time(0) - BASE_TIME;
   /*uint32_t old_time = rtc_to_seconds();
   uint32_t diff = last_time_register - old_time;*/
 
-  seconds_to_rtc(last_time_register);
+  seconds_to_rtc(rtc_to_seconds() + diff);
 }
 
 void MBC_3::seconds_to_rtc(uint32_t seconds) {
@@ -134,6 +148,8 @@ void MBC_3::save_state() {
                      ram_ref[this->ram_size]);
       if (clock) {
         rom_save.write(reinterpret_cast<char *>(rtc_regs), sizeof(rtc_regs));
+        rom_save.write(reinterpret_cast<char *>(&last_time_register),
+                       sizeof(uint32_t));
       }
       rom_save.close();
       std::cout << "saved" << std::endl;
@@ -190,7 +206,11 @@ void MBC_3::write(uint16_t address, uint8_t data) {
           default:
             break;
           }
-          rtc_regs[(ram_bank_number - 0x08) & 0x07] = data & 0xFF;
+          rtc_regs[(ram_bank_number - 0x08) % 5] = data & 0xFF;
+          last_time_register = std::time(0) - BASE_TIME;
+          std::cout << (int)rtc_regs[0] << " " << (int)rtc_regs[1] << " "
+                    << (int)rtc_regs[2] << " " << (int)rtc_regs[3] << " "
+                    << (int)rtc_regs[4] << std::endl;
         }
       }
     }
@@ -201,9 +221,6 @@ uint8_t MBC_3::read(uint16_t address) {
   if (address < 0x4000) {
     return rom_bank[address & 0x3FFF];
   } else if (address < 0x8000) {
-    if (bank_number == 0) {
-      bank_number = 1;
-    }
     return rom_bank[(address & 0x3FFF) + (bank_number * 0x4000)];
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_bank_number < 0x08 || !clock) {
@@ -212,7 +229,7 @@ uint8_t MBC_3::read(uint16_t address) {
       }
     } else if (clock) {
       if (rtc_enable) {
-        return rtc_regs[(ram_bank_number - 0x08) & 0x07];
+        return rtc_regs[(ram_bank_number - 0x08) % 5];
       }
     }
     return 0xFF;
