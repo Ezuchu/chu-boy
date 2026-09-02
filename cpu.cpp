@@ -26,7 +26,7 @@ Cpu::Cpu() {
   op_table[0x0E] = {&Cpu::LD, &Cpu::AM_R_D8, regC, None, No_cond};
   op_table[0x0F] = {&Cpu::RRCA, &Cpu::NONE, None, None, No_cond};
 
-  op_table[0x10] = {&Cpu::STOP, &Cpu::AM_R_D8, None, None, No_cond};
+  op_table[0x10] = {&Cpu::STOP, &Cpu::NONE, None, None, No_cond};
   op_table[0x11] = {&Cpu::LD, &Cpu::AM_RR_NN, regDE, None, No_cond};
   op_table[0x12] = {&Cpu::LD, &Cpu::AM_I16_R, regDE, regA, No_cond};
   op_table[0x13] = {&Cpu::INC, &Cpu::AM_RR, regDE, None, No_cond};
@@ -480,7 +480,8 @@ void Cpu::push_to_interrupt(uint16_t address) {
 void Cpu::step() {
   if (stop_flag) {
     uint8_t input = read(0xFF00);
-    stop_flag = (input & 0x0F) != 0xFF ? false : true;
+    stop_flag = (input & 0x0F) == 0x0F ? true : false;
+    return;
   }
   if (!stop_flag) {
     if ((*IE & *IF & 0x1F) != 0) {
@@ -736,7 +737,9 @@ void Cpu::STOP() {
         // reset DIV
         write(0, 0xFF04);
       }
+      *KEY1 &= 0xFE;
       speed_mode = (*KEY1 >> 7) & 0x01;
+
     } else {
       if (!((*IE & *IF) != 0)) {
         pc++;
@@ -749,9 +752,10 @@ void Cpu::STOP() {
 
 void Cpu::HALT() {
   if (IME == false) {
-    if (CGB == 0 && (((*IF & *IE) & 0x1F) != 0)) {
-      halt_bug = true;
-
+    if (((*IF & *IE) & 0x1F) != 0) {
+      if (CGB == 0) {
+        halt_bug = true;
+      }
     } else {
       is_halted = true;
     }

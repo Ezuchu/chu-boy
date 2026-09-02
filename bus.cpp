@@ -83,7 +83,7 @@ void Bus::write(uint8_t data, uint16_t address) {
     if (address == 0xFF00) {
       uint8_t *P1 = this->get_address(0xFF00);
       data = data & 0x30;
-      *P1 = (data & 0x30) | (*P1 & 0x0F);
+      *P1 = (data & 0x30) | 0x0F;
       return;
     }
     if (address == 0xFF04) {
@@ -93,6 +93,15 @@ void Bus::write(uint8_t data, uint16_t address) {
     }
     if (address == 0xFF0F) {
       *IF = data | 0xE0;
+      return;
+    }
+    if (address == 0xFF55) {
+      uint8_t mode = (data & 0x80) >> 7;
+      uint8_t length = (data & 0x7F);
+      if (mode == 1 && this->vdma.state != 0) {
+        return;
+      }
+      this->vdma.vdma_start(mode, length);
       return;
     }
     this->io.write(data, address - 0xFF00);
@@ -111,14 +120,6 @@ void Bus::write(uint8_t data, uint16_t address) {
           reset_to_dmg_flag = 1;
         }
         return;
-      }
-      if (address == 0xFF55) {
-        uint8_t mode = (data & 0x80) >> 7;
-        uint8_t length = (data & 0x7F);
-        if (mode == 0) {
-          this->cpu.is_halted = true;
-        }
-        this->vdma.vdma_start(mode, length);
       }
     }
     if (address == 0xFF46) {
@@ -317,9 +318,13 @@ void Bus::clock() {
     this->cpu.step();
     return;
   }
-
-  this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
-  this->cpu.step();
+  if ((this->vdma.state != 1 &&
+       (this->vdma.state != 2 || ((this->read(0xFF41) & 0x03) != 0) ||
+        ((this->read(0xFF40) & 0x80) == 0x00) || this->cpu.is_halted))) {
+    this->cpu.step();
+  } else {
+    this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
+  }
   this->dma.dma_step();
   this->apu.step(this->cpu.speed_mode ? 2 : 4);
   this->ppu.step(this->cpu.speed_mode ? 2 : 4);

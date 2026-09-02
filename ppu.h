@@ -5,7 +5,7 @@
 
 class Bus;
 
-enum PpuState { OAMsearch, Pixeltransfer, HBlank, VBlank };
+enum PpuState { OFF, OAMsearch, Pixeltransfer, HBlank, VBlank };
 
 class Ppu {
   struct object_type {
@@ -15,7 +15,6 @@ class Ppu {
     uint8_t flags;
   };
 
-  PpuState state;
   bool ppu_was_on;
 
   uint8_t *LCDC;
@@ -82,6 +81,7 @@ class Ppu {
   uint8_t buffer_index = 8;
 
 public:
+  PpuState state;
   bool CGB = false;
   Ppu();
   ~Ppu();

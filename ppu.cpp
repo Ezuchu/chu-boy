@@ -438,6 +438,7 @@ void Ppu::step(uint8_t cycles) {
       cycle_counter = 0;
       lx = 0;
       ppu_was_on = false;
+      this->state = OFF;
     }
   } else {
     if (!ppu_was_on) {

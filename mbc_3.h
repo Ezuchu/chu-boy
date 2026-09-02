@@ -7,9 +7,10 @@ private:
 
   bool clock = false;
   uint8_t rtc_regs[5];
+  uint8_t latch_regs[5];
 
   bool rtc_enable = false;
-  bool latch = true;
+  bool latch = false;
 
   uint32_t last_time_register = 0;
 

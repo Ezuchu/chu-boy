@@ -42,6 +42,10 @@ void MBC_3::load_cartridge(Cartridge *cart) {
         if (rom_save) {
           rom_save.read(reinterpret_cast<char *>(&last_time_register),
                         sizeof(uint32_t));
+          if (rom_save) {
+            rom_save.read(reinterpret_cast<char *>(latch_regs),
+                          sizeof(latch_regs));
+          }
         } else {
           initialize_rtc();
         }
@@ -150,6 +154,8 @@ void MBC_3::save_state() {
         rom_save.write(reinterpret_cast<char *>(rtc_regs), sizeof(rtc_regs));
         rom_save.write(reinterpret_cast<char *>(&last_time_register),
                        sizeof(uint32_t));
+        rom_save.write(reinterpret_cast<char *>(latch_regs),
+                       sizeof(latch_regs));
       }
       rom_save.close();
       std::cout << "saved" << std::endl;
@@ -158,7 +164,7 @@ void MBC_3::save_state() {
 }
 
 void MBC_3::write(uint16_t address, uint8_t data) {
-  static const int rom_ref[] = {0, 0x3, 0x7, 0xF, 0x1F, 0x3F, 0x7F};
+  static const int rom_ref[] = {0, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F};
   if (address <= 0x1FFF) {
     if ((data & 0x0F) == 0x0A) {
       ram_enable = true;
@@ -180,6 +186,9 @@ void MBC_3::write(uint16_t address, uint8_t data) {
     if (!latch && (data & 0x01)) {
       latch = true;
       update_rtc();
+      for (int i = 0; i < 5; i++) {
+        latch_regs[i] = rtc_regs[i];
+      }
     } else if (latch && !(data & 0x01)) {
       latch = false;
     }
@@ -191,26 +200,19 @@ void MBC_3::write(uint16_t address, uint8_t data) {
     } else {
       if (ram_bank_number >= 0x08 && clock) {
         if (rtc_enable) {
+          update_rtc();
           switch (ram_bank_number) {
           case 0x08:
           case 0x09:
-            while (data >= 60) {
-              data -= 60;
-            }
+            data %= 60;
             break;
           case 0x0A:
-            while (data >= 24) {
-              data -= 24;
-            }
+            data %= 24;
             break;
           default:
             break;
           }
           rtc_regs[(ram_bank_number - 0x08) % 5] = data & 0xFF;
-          last_time_register = std::time(0) - BASE_TIME;
-          std::cout << (int)rtc_regs[0] << " " << (int)rtc_regs[1] << " "
-                    << (int)rtc_regs[2] << " " << (int)rtc_regs[3] << " "
-                    << (int)rtc_regs[4] << std::endl;
         }
       }
     }
@@ -221,6 +223,9 @@ uint8_t MBC_3::read(uint16_t address) {
   if (address < 0x4000) {
     return rom_bank[address & 0x3FFF];
   } else if (address < 0x8000) {
+    if (bank_number == 0) {
+      bank_number = 1;
+    }
     return rom_bank[(address & 0x3FFF) + (bank_number * 0x4000)];
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_bank_number < 0x08 || !clock) {
@@ -229,6 +234,10 @@ uint8_t MBC_3::read(uint16_t address) {
       }
     } else if (clock) {
       if (rtc_enable) {
+        if (latch) {
+          return latch_regs[(ram_bank_number - 0x08) % 5];
+        }
+        update_rtc();
         return rtc_regs[(ram_bank_number - 0x08) % 5];
       }
     }
