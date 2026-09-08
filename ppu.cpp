@@ -111,8 +111,8 @@ void Ppu::pixelTransfer() {
 
   if (CGB) {
     if ((bg_pixel != 0 || obj == nullptr) &&
-        (obj_act_pixel == 0 || (bg_attributes & 0x80) == 0x80 ||
-         obj == nullptr || (obj->flags & 0x80) == 0x80)) {
+        ((bg_attributes & 0x80) == 0x80 || obj == nullptr ||
+         (obj->flags & 0x80) == 0x80)) {
 
       uint8_t palette_index = (bg_attributes & 0x07);
       uint8_t color_address = ((palette_index * 8) + (2 * bg_pixel)) & 0x3F;
@@ -127,10 +127,7 @@ void Ppu::pixelTransfer() {
       this->vga->push_pixel_color(bg_color, lx, *LY);
       return;
     } else if (obj != nullptr) {
-      if (act_obj_index != last_object) {
-        last_object = act_obj_index;
-        act_cycles -= 6;
-      }
+
       uint8_t palette_index = obj->flags & 0x07;
       uint8_t color_address =
           ((palette_index * 8) + (2 * obj_act_pixel)) & 0x3F;
@@ -162,7 +159,7 @@ void Ppu::pixelTransfer() {
 }
 
 uint8_t Ppu::getObjPixel(object_type *obj) {
-  int obj_x = (lx - obj->x + 8) % 8;
+  int obj_x = (lx - (obj->x - 8)) & 0x07;
   if (obj_x < 0)
     obj_x += 8;
   int obj_y = (int)(*LY) - ((int)obj->y - 16);
@@ -202,18 +199,6 @@ uint8_t Ppu::getObjPixel(object_type *obj) {
 
   pixel_to_draw = obj_pixel;
   return obj_pixel;
-  /*
-if (pixel_to_draw == 0) {
-return;
-}
-
-if ((obj_flags & 0x10) == 0x10) {
-obj_pixel = (*OBP1 >> (obj_pixel * 2)) & 0x03;
-} else {
-obj_pixel = (*OBP0 >> (obj_pixel * 2)) & 0x03;
-}
-
-this->vga->push_pixel(obj_pixel, lx, *LY);*/
 }
 
 uint8_t Ppu::getWinPixel() {

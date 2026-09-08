@@ -37,6 +37,7 @@ CMakeScripts/
 CTestTestfile.cmake
 _deps/
 *.cmake
+.vscode/
 
 # Python (backup for gen_opcodes.py)
 __pycache__/

@@ -56,12 +56,20 @@ void Bus::write(uint8_t data, uint16_t address) {
       this->ram.write(data, address - 0xC000 + (RBANK * 0x1000));
       return;
     }
+
     this->ram.write(data, address - 0xC000);
+    if (address == 0xCF71) {
+
+      std::cout << "read " << (int)this->ram.read(address - 0xC000)
+                << std::endl;
+    }
   }
   if (address >= 0x8000 && address <= 0x9FFF) {
     if ((this->read(0xFF40) & 0x80) == 0x80 &&
-        (this->read(0xFF41) & 0x03) == 0x03)
+        (this->read(0xFF41) & 0x03) == 0x03) {
       return;
+    }
+
     uint8_t VBANK = 0x00;
     // If cgb check video bank
     if (CGB) {
@@ -95,30 +103,48 @@ void Bus::write(uint8_t data, uint16_t address) {
       *IF = data | 0xE0;
       return;
     }
+
     if (address == 0xFF55) {
+      this->io.write(data, address - 0xFF00);
       uint8_t mode = (data & 0x80) >> 7;
       uint8_t length = (data & 0x7F);
-      if (mode == 1 && this->vdma.state != 0) {
-        return;
-      }
       this->vdma.vdma_start(mode, length);
       return;
     }
+
+    if (address == 0xFF4C) {
+
+      if (data != 0 && CGB) {
+        reset_to_dmg_flag = 1;
+      }
+      this->io.write(data, address - 0xFF00);
+      return;
+    }
     this->io.write(data, address - 0xFF00);
+
     if (CGB) {
+      if (address == 0xFF51) {
+        this->vdma.write_hdm1();
+        return;
+      }
+      if (address == 0xFF52) {
+        this->vdma.write_hdm2();
+        return;
+      }
+      if (address == 0xFF53) {
+        this->vdma.write_hdm3();
+        return;
+      }
+      if (address == 0xFF54) {
+        this->vdma.write_hdm4();
+        return;
+      }
       if (address == 0xFF69) {
         this->write_bg_cram(data);
         return;
       }
       if (address == 0xFF6B) {
         this->write_ob_cram(data);
-        return;
-      }
-      if (address == 0xFF4C) {
-        std::cout << "CGB: " << (int)(data) << std::endl;
-        if (data != 0 && CGB != 0) {
-          reset_to_dmg_flag = 1;
-        }
         return;
       }
     }
@@ -163,12 +189,21 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     }
     return this->rom->read(address);
   }
+  if (address >= 0xE000 && address <= 0xFDFF) {
+    address -= 0x2000;
+  }
   if (address >= 0xC000 && address <= 0xDFFF) {
     if (CGB && address > 0xCFFF) {
       uint8_t RBANK = 0x00;
       RBANK = read(0xFF70) & 0x07;
-      if (RBANK == 0)
+      if (RBANK == 0) {
         RBANK = 0x01;
+      }
+      if (address == 0xCF71) {
+        std::cout << "read "
+                  << (int)this->ram.read(address - 0xC000 + (RBANK * 0x1000))
+                  << std::endl;
+      }
       return this->ram.read(address - 0xC000 + (RBANK * 0x1000));
     }
     return this->ram.read(address - 0xC000);
@@ -197,6 +232,12 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     /*if (address == 0xFF44) {
       return 0x90;
     }*/
+    if (address >= 0xFF51 && address <= 0xFF54 && is_cpu) {
+      return 0xFF;
+    }
+    if (address == 0xFF55 && CGB) {
+      return this->vdma.read_vdma();
+    }
 
     if (address == 0xFF69 && CGB) {
       return this->read_bg_cram();
@@ -288,6 +329,7 @@ uint8_t *Bus::get_address(uint16_t address) {
 }
 
 void Bus::clock() {
+  static int vram_count = 0;
   if (this->reset_to_dmg_flag) {
     this->CGB = 0;
     this->cpu.CGB = 0;
@@ -318,15 +360,22 @@ void Bus::clock() {
     this->cpu.step();
     return;
   }
-  if ((this->vdma.state != 1 &&
-       (this->vdma.state != 2 || ((this->read(0xFF41) & 0x03) != 0) ||
-        ((this->read(0xFF40) & 0x80) == 0x00) || this->cpu.is_halted))) {
-    this->cpu.step();
-  } else {
-    this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
+
+  if (CGB && this->vdma.state != 0) {
+    int bytes = vdma.vdma_step();
+    if (vram_count <= 0) {
+      vram_count = bytes;
+    }
   }
+  vram_count = this->cpu.speed_mode ? vram_count - 1 : vram_count - 2;
+
+  if (vram_count <= 0) {
+    this->cpu.step();
+  }
+
   this->dma.dma_step();
   this->apu.step(this->cpu.speed_mode ? 2 : 4);
+
   this->ppu.step(this->cpu.speed_mode ? 2 : 4);
 
   this->div_counter += 1;
@@ -338,10 +387,19 @@ void Bus::clock() {
 }
 
 void Bus::clock(uint8_t cycles) {
-  for (int i = 0; i < cycles; i++) {
-    this->vdma.vdma_step(this->cpu.speed_mode ? 1 : 2);
+  int vram_count = 0;
+  int i = 0;
+  while (i < cycles || vram_count > 0) {
+
     this->dma.dma_step();
     this->apu.step(this->cpu.speed_mode ? 2 : 4);
+    if (CGB && this->vdma.state != 0) {
+      int bytes = vdma.vdma_step();
+      if (vram_count <= 0) {
+        vram_count = bytes;
+      }
+    }
+    vram_count = this->cpu.speed_mode ? vram_count - 1 : vram_count - 2;
     this->ppu.step(this->cpu.speed_mode ? 2 : 4);
 
     this->div_counter += 1;
@@ -350,6 +408,7 @@ void Bus::clock(uint8_t cycles) {
       this->div_counter = 0;
     }
     timer_clock(1);
+    i++;
   }
 }
 

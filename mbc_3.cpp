@@ -1,4 +1,5 @@
 #include "mbc_3.h"
+#include "mbc.h"
 #include <cstring>
 #include <ctime>
 
@@ -73,7 +74,7 @@ void MBC_3::initialize_rtc() {
   const std::time_t BASE_TIME = 946684800; // 2000-01-01 00:00:00 UTC
   std::time_t act_time = std::time(0);
   std::time_t diff = act_time - BASE_TIME;
-  last_time_register = act_time;
+  last_time_register = diff;
 
   uint32_t days = diff / 86400;
   uint32_t remaining = diff % 86400;
@@ -95,9 +96,12 @@ void MBC_3::initialize_rtc() {
 }
 
 void MBC_3::update_rtc() {
-
   uint32_t diff = (std::time(0) - BASE_TIME) - last_time_register;
   last_time_register = std::time(0) - BASE_TIME;
+  if ((rtc_regs[4] & 0x40) != 0) {
+    return;
+  }
+
   /*uint32_t old_time = rtc_to_seconds();
   uint32_t diff = last_time_register - old_time;*/
 
@@ -129,7 +133,7 @@ void MBC_3::seconds_to_rtc(uint32_t seconds) {
   rtc_regs[1] = mins;
   rtc_regs[2] = hrs;
   rtc_regs[3] = day_low;
-  rtc_regs[4] = day_high;
+  rtc_regs[4] = (rtc_regs[4] & 0xFE) | day_high;
 }
 
 uint32_t MBC_3::rtc_to_seconds() {
@@ -176,7 +180,7 @@ void MBC_3::write(uint16_t address, uint8_t data) {
       rtc_enable = false;
     }
   } else if (address <= 0x3FFF) {
-    bank_number = (data & 0x7F) == 0 ? 1 : (data & 0x7F) & rom_ref[rom_size];
+    bank_number = (data & 0x7F) == 0 ? 1 : data & rom_ref[rom_size];
   } else if (address <= 0x5FFF) {
     ram_bank_number = data & 0x0F;
     if (ram_bank_number > 0x0C) {
@@ -195,7 +199,7 @@ void MBC_3::write(uint16_t address, uint8_t data) {
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_bank_number < 0x08 || !clock) {
       if (ram_enable && ram_size > 1) {
-        ram_bank[address - 0xA000 + (0x2000 * (ram_bank_number & 0x03))] = data;
+        ram_bank[address - 0xA000 + (0x2000 * (ram_bank_number & 0x07))] = data;
       }
     } else {
       if (ram_bank_number >= 0x08 && clock) {
@@ -223,22 +227,17 @@ uint8_t MBC_3::read(uint16_t address) {
   if (address < 0x4000) {
     return rom_bank[address & 0x3FFF];
   } else if (address < 0x8000) {
-    if (bank_number == 0) {
-      bank_number = 1;
-    }
     return rom_bank[(address & 0x3FFF) + (bank_number * 0x4000)];
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_bank_number < 0x08 || !clock) {
       if (ram_enable && ram_size > 1) {
-        return ram_bank[address - 0xA000 + (0x2000 * (ram_bank_number & 0x03))];
+        return ram_bank[address - 0xA000 + (0x2000 * (ram_bank_number & 0x07))];
       }
     } else if (clock) {
-      if (rtc_enable) {
-        if (latch) {
-          return latch_regs[(ram_bank_number - 0x08) % 5];
-        }
-        update_rtc();
-        return rtc_regs[(ram_bank_number - 0x08) % 5];
+      if (latch) {
+        return latch_regs[(ram_bank_number - 0x08) % 5];
+      } else {
+        return 0xFF;
       }
     }
     return 0xFF;
