@@ -15,6 +15,39 @@ class Ppu {
     uint8_t flags;
   };
 
+  struct bg_tile {
+    uint8_t tile_id;
+    uint8_t attributes;
+    uint8_t low_byte;
+    uint8_t high_byte;
+  };
+
+  struct BG_pixel_type {
+    uint8_t color;
+    uint8_t palette;
+    uint8_t bg_priority;
+  };
+
+  struct OBJ_pixel_type {
+    uint8_t color;
+    uint8_t palette;
+    uint8_t obj_priority;
+  };
+
+  enum Fetcher_State { FetchTileId, FetchLowByte, FetchHighByte, sleep };
+  Fetcher_State fetcher_state = FetchTileId;
+
+  enum FIFO_State { FirstBG, BgRender, Sprite, FirstW };
+  FIFO_State fifo_state = FirstBG;
+
+  bg_tile current_bg_tile;
+
+  BG_pixel_type bg_fifo[8];
+  OBJ_pixel_type obj_fifo[8];
+
+  int bg_fifo_index = 0;
+  int obj_fifo_index = 0;
+
   bool ppu_was_on;
 
   uint8_t *LCDC;
@@ -68,13 +101,8 @@ class Ppu {
   void hBlank();
   void vBlank();
 
-  enum FetcherState {
-    FetchTileId,
-    FetchTileAttrs,
-    FetchLowByte,
-    FetchHighByte
-  };
-  FetcherState fetcher_state = FetchTileId;
+  void getBgTile();
+
   int fetcher_cycles = 0;
 
   uint8_t bg_pixel_buffer[8];

@@ -1,5 +1,6 @@
 #include "bus.h"
 #include "memory.h"
+#include "ppu.h"
 #include <cstdint>
 
 Bus::Bus(bool is_cgb)
@@ -138,11 +139,15 @@ void Bus::write(uint8_t data, uint16_t address) {
         return;
       }
       if (address == 0xFF69) {
-        this->write_bg_cram(data);
+        if (ppu.state != PpuState::Pixeltransfer) {
+          this->write_bg_cram(data);
+        }
         return;
       }
       if (address == 0xFF6B) {
-        this->write_ob_cram(data);
+        if (ppu.state != PpuState::Pixeltransfer) {
+          this->write_ob_cram(data);
+        }
         return;
       }
     }
@@ -232,9 +237,15 @@ uint8_t Bus::read(uint16_t address, bool is_cpu) {
     }
 
     if (address == 0xFF69 && CGB) {
+      if (ppu.state == PpuState::Pixeltransfer && is_cpu) {
+        return 0xFF;
+      }
       return this->read_bg_cram();
     }
     if (address == 0xFF6B && CGB) {
+      if (ppu.state == PpuState::Pixeltransfer && is_cpu) {
+        return 0xFF;
+      }
       return this->read_ob_cram();
     }
     if (address == 0xFF4C) {

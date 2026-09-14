@@ -48,6 +48,79 @@ void Ppu::oamSearch() {
   oam_index += 0x04;
 }
 
+void Ppu::getBgTile() {
+
+  switch (fetcher_state) {
+  case FetchTileId: {
+    current_bg_tile = {0, 0, 0, 0};
+    int bg_x = ((*SCX + lx) & 255) / 8;
+    int bg_y = ((*SCY + *LY) & 255) / 8;
+
+    uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
+    uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
+
+    uint16_t map_address = background_area + (32 * (bg_y % 32)) + (bg_x % 32);
+
+    uint8_t bg_pixel_index = bus->Vram.read(map_address - 0x8000);
+
+    uint16_t tile_index;
+    if (tile_data_area == 0x8000) {
+      tile_index = tile_data_area + (uint16_t)(16 * bg_pixel_index);
+    } else {
+      int8_t signed_index = (int8_t)bg_pixel_index;
+      tile_index = 0x9000 + signed_index * 16;
+    }
+
+    if (CGB) {
+      current_bg_tile.attributes =
+          bus->Vram.read(map_address - 0x8000 + 0x2000);
+    }
+    uint8_t bank = (current_bg_tile.attributes >> 3) & 0x01;
+    int row =
+        (bg_attributes & 0x40) ? 7 - ((*SCY + *LY) % 8) : ((*SCY + *LY) % 8);
+    current_bg_tile.tile_id = tile_index + row + (bank * 0x2000);
+    act_cycles -= 2;
+    fetcher_state = FetchLowByte;
+    break;
+  }
+  case FetchLowByte:
+
+    current_bg_tile.low_byte =
+        bus->Vram.read((current_bg_tile.tile_id) - 0x8000);
+    act_cycles -= 2;
+    fetcher_state = FetchHighByte;
+    break;
+  case FetchHighByte:
+    current_bg_tile.high_byte =
+        bus->Vram.read((current_bg_tile.tile_id + 0x0001) - 0x8000);
+
+    for (int i = 0; i < 8; i++) {
+      uint8_t x_flip = (current_bg_tile.attributes >> 5) & 0x01;
+
+      uint8_t low_color_bit;
+      uint8_t high_color_bit;
+      if (x_flip) {
+        low_color_bit = (current_bg_tile.low_byte >> (i)) & 0x01;
+        high_color_bit = ((current_bg_tile.high_byte >> (i)) & 0x01) << 1;
+      } else {
+        low_color_bit = (current_bg_tile.low_byte >> (7 - i)) & 0x01;
+        high_color_bit = ((current_bg_tile.high_byte >> (7 - i)) & 0x01) << 1;
+      }
+      uint8_t color = low_color_bit | high_color_bit;
+
+      bg_fifo[i] = {color, (uint8_t)(current_bg_tile.attributes & 0x07), 0};
+    }
+    act_cycles -= 2;
+    fetcher_state = sleep;
+    break;
+  case sleep:
+    act_cycles -= 2;
+    fetcher_state = FetchTileId;
+    fifo_state = BgRender;
+    break;
+  }
+}
+
 void Ppu::pixelTransfer() {
   static int last_object = 0;
   if (this->state != Pixeltransfer) {
@@ -56,13 +129,8 @@ void Ppu::pixelTransfer() {
     *STAT = (*STAT & 0xFC) | 0x03;
     act_obj_index = 0;
 
-    uint8_t penalty = *SCX % 8;
-    act_cycles -= penalty;
-    last_object = -1;
-    if (act_cycles <= 0) {
-      lx--;
-      return;
-    };
+    fifo_state = FirstBG;
+    fetcher_state = FetchTileId;
   }
   obj = nullptr;
   bg_attributes = 0x00;
@@ -98,6 +166,15 @@ void Ppu::pixelTransfer() {
       return;
   }*/
 
+  if (fifo_state == FirstBG) {
+    getBgTile();
+    if (fetcher_state == sleep) {
+      fifo_state = BgRender;
+      act_cycles -= (*SCX % 8);
+    }
+    return;
+  }
+
   uint8_t bg_pixel = 0;
 
   if (*LCDC & 0x01 || (CGB && (obj == nullptr || obj_act_pixel == 0))) {
@@ -125,6 +202,7 @@ void Ppu::pixelTransfer() {
       /*std::cout << std::hex << (int)(2 * bg_pixel) << " " << std::hex
                 << (int)color_address << std::endl;*/
       this->vga->push_pixel_color(bg_color, lx, *LY);
+      lx++;
       return;
     } else if (obj != nullptr) {
 
@@ -138,6 +216,7 @@ void Ppu::pixelTransfer() {
       uint16_t obj_color = (high_color << 8) | low_color;
 
       this->vga->push_pixel_color(obj_color, lx, *LY);
+      lx++;
 
       return;
     }
@@ -156,6 +235,7 @@ void Ppu::pixelTransfer() {
     }
     this->vga->push_pixel(final_color, lx, *LY);
   }
+  lx++;
 }
 
 uint8_t Ppu::getObjPixel(object_type *obj) {
@@ -447,7 +527,7 @@ void Ppu::step(uint8_t cycles) {
             pixelTransfer();
             act_cycles -= 1;
             cycle_counter += 1;
-            lx++;
+
           } else if (lx >= 160 && cycle_counter < 456) {
             /*if (this->state == Pixeltransfer) {
               *LY = *LY + 1;
