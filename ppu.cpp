@@ -415,7 +415,9 @@ void Ppu::connectVga(Vga *vga) { this->vga = vga; }
 void Ppu::handle_enable_disable() {}
 
 void Ppu::step(uint8_t cycles) {
-  if ((*LCDC & 0x80) == 0x00) {
+  static int set_off = 0;
+  if (((*LCDC & 0x80) == 0x00) && set_off == 1) {
+    set_off = 0;
     if (ppu_was_on) {
       *LY = 0;
       *STAT &= ~(0x03);
@@ -423,12 +425,15 @@ void Ppu::step(uint8_t cycles) {
       cycle_counter = 0;
       lx = 0;
       ppu_was_on = false;
-      this->state = OFF;
     }
   } else {
     if (!ppu_was_on) {
+      set_off = 0;
       *STAT |= 0x01;
       ppu_was_on = true;
+    }
+    if (((*LCDC & 0x80) == 0x00)) {
+      set_off = 1;
     }
     act_cycles += cycles;
     while (act_cycles > 0) {

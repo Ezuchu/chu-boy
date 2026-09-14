@@ -29,6 +29,7 @@ void VDMA::vdma_start(uint8_t mode, uint8_t rlength) {
     return;
   }
 
+  this->ppu_prev_state = this->bus->ppu.state;
   this->length = 16 * (uint16_t)(rlength + 1);
 
   if (mode == 0) { // GDMA

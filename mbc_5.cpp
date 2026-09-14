@@ -1,15 +1,15 @@
-#include "mbc_1.h"
+#include "mbc_5.h"
 #include <cstring>
 
-MBC_1::MBC_1(bool has_battery) { this->battery = has_battery; }
+MBC_5::MBC_5(bool has_battery) { this->battery = has_battery; }
 
-MBC_1::~MBC_1() {
+MBC_5::~MBC_5() {
   std::cout << "in destructor" << std::endl;
   save_state();
   delete[] ram_bank;
 }
 
-void MBC_1::load_cartridge(Cartridge *cart) {
+void MBC_5::load_cartridge(Cartridge *cart) {
 
   this->filename = cart->filename;
   this->savename = filename.substr(0, filename.find_last_of(".")) + ".sav";
@@ -39,7 +39,7 @@ void MBC_1::load_cartridge(Cartridge *cart) {
   }
 }
 
-void MBC_1::save_state() {
+void MBC_5::save_state() {
   if (battery && ram_ref[this->ram_size] > 1) {
     std::ofstream rom_save;
     rom_save.open(savename, std::ofstream::binary);
@@ -53,52 +53,44 @@ void MBC_1::save_state() {
   }
 }
 
-void MBC_1::write(uint16_t address, uint8_t data) {
-  static const int rom_ref[] = {0, 0x3, 0x7, 0xF, 0x1F, 0x1F, 0x1F};
+void MBC_5::write(uint16_t address, uint8_t data) {
+  static const int rom_ref[] = {0, 0x3, 0x7, 0xF, 0x1F, 0x3F, 0x7F, 0xFF, 0xFF};
+  static const int ram_size_ref[] = {0x0, 0x0, 0x01, 0x03, 0x0F, 0x07};
   if (address <= 0x1FFF) {
     if (data == 0xA) {
       ram_enable = true;
     } else {
       ram_enable = false;
     }
+  } else if (address <= 0x2FFF) {
+    bank1 = (data & rom_ref[rom_size]);
   } else if (address <= 0x3FFF) {
-    bank1 = (data & 0x1F) == 0 ? 1 : data & rom_ref[this->rom_size];
+    if (rom_size > 7) {
+      bank2 = (data & 0x01);
+    } else {
+      bank1 = (data & rom_ref[rom_size]);
+    }
+
   } else if (address <= 0x5FFF) {
-    if (rom_size > 4) {
-      bank2 = rom_size == 5 ? data & 0x1 : data & 0x3;
+    if (ram_enable && ram_size > 1) {
+      ram_bank_number = data & ram_size_ref[ram_size];
     }
-    if (ram_enable && ram_size > 2) {
-      ram_bank_number = data & 0x3;
-    }
-  } else if (address <= 0x7FFF) {
-    bank_mode = data & 0x1;
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_enable && ram_size > 1) {
-      if (bank_mode == 0) {
-        ram_bank[address - 0xA000] = data;
-      } else {
-        ram_bank[address - 0xA000 + (0x2000 * ram_bank_number)] = data;
-      }
+      ram_bank[address - 0xA000 + (0x2000 * ram_bank_number)] = data;
     }
   }
 }
 
-uint8_t MBC_1::read(uint16_t address) {
+uint8_t MBC_5::read(uint16_t address) {
   if (address < 0x4000) {
-    if (bank_mode == 0) {
-      return rom_bank[address & 0x3FFF];
-    } else {
-      return rom_bank[(address & 0x3FFF) + ((bank2 << 5) * 0x4000)];
-    }
+    return rom_bank[address & 0x3FFF];
   } else if (address < 0x8000) {
-    return rom_bank[(address & 0x3FFF) + ((bank1 | (bank2 << 5)) * 0x4000)];
+    uint16_t bank = (bank1 | (bank2 << 8));
+    return rom_bank[(address & 0x3FFF) + (bank * 0x4000)];
   } else if (address >= 0xA000 && address <= 0xBFFF) {
     if (ram_enable && ram_size > 1) {
-      if (bank_mode == 0) {
-        return ram_bank[address - 0xA000 + (0x2000 * 0)];
-      } else {
-        return ram_bank[address - 0xA000 + (0x2000 * ram_bank_number)];
-      }
+      return ram_bank[address - 0xA000 + (0x2000 * ram_bank_number)];
     }
     return 0xFF;
   } else {

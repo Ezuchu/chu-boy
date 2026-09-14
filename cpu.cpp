@@ -287,7 +287,7 @@ void Cpu::connectBus(Bus *bus) {
     this->de = {0xFF56};
     this->hl = {0x000D};
     this->sp = {0xFFFE};
-    this->pc = {0x0000};
+    this->pc = {0x0100};
     CGB = true;
   }
 
@@ -493,6 +493,11 @@ void Cpu::step() {
     }
     if (!is_halted) {
       fetch_instruction();
+      if (act_instruction->mode == nullptr) {
+        act_instruction = &op_table[0x00];
+        opcode = 0x00;
+      }
+
       execute_mode();
       execute_instruction();
 
@@ -501,6 +506,7 @@ void Cpu::step() {
         IME = true;
         IME_pending = false;
       }
+
       // print_state();
     }
   }
@@ -733,8 +739,8 @@ void Cpu::STOP() {
         }
       } else {
         pc++;
-        is_halted = true;
-        // reset DIV
+        // is_halted = true;
+        //  reset DIV
         write(0, 0xFF04);
       }
       *KEY1 &= 0xFE;
@@ -759,8 +765,6 @@ void Cpu::HALT() {
     } else {
       is_halted = true;
     }
-  } else {
-    is_halted = true;
   }
 }
 

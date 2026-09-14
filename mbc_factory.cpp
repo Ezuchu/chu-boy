@@ -2,6 +2,7 @@
 #include "mbc_1.h"
 #include "mbc_2.h"
 #include "mbc_3.h"
+#include "mbc_5.h"
 #include "no_mbc.h"
 
 rom_controller *mbc_factory::create_mbc(Cartridge *cart) {
@@ -32,6 +33,12 @@ rom_controller *mbc_factory::create_mbc(Cartridge *cart) {
     return new MBC_3();
   case 0x13:
     return new MBC_3(true);
+
+  case 0x19:
+  case 0x1A:
+    return new MBC_5();
+  case 0x1B:
+    return new MBC_5(true);
   default:
     return nullptr;
   }
