@@ -2,6 +2,7 @@
 
 #include "vga.h"
 #include <cstdint>
+#include <queue>
 
 class Bus;
 
@@ -16,7 +17,7 @@ class Ppu {
   };
 
   struct bg_tile {
-    uint8_t tile_id;
+    uint16_t tile_id;
     uint8_t attributes;
     uint8_t low_byte;
     uint8_t high_byte;
@@ -42,8 +43,8 @@ class Ppu {
 
   bg_tile current_bg_tile;
 
-  BG_pixel_type bg_fifo[8];
-  OBJ_pixel_type obj_fifo[8];
+  std::queue<BG_pixel_type> bg_fifo;
+  std::queue<OBJ_pixel_type> obj_fifo;
 
   int bg_fifo_index = 0;
   int obj_fifo_index = 0;
@@ -71,9 +72,11 @@ class Ppu {
   uint8_t *IF;
   uint8_t *IE;
 
-  uint8_t lx = 0;
+  int lx = 0;
+  int fx = 0;
   int16_t cycle_counter = 0;
   int8_t act_cycles = 0;
+  int remaining_cycles = 0;
 
   uint16_t oam_index = 0xFE00;
   uint8_t obj_index = 0;

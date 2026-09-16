@@ -50,74 +50,55 @@ void Ppu::oamSearch() {
 
 void Ppu::getBgTile() {
 
-  switch (fetcher_state) {
-  case FetchTileId: {
-    current_bg_tile = {0, 0, 0, 0};
-    int bg_x = ((*SCX + lx) & 255) / 8;
-    int bg_y = ((*SCY + *LY) & 255) / 8;
+  current_bg_tile = {0, 0, 0, 0};
+  uint16_t bg_x = ((*SCX + fx) & 255) / 8;
+  uint16_t bg_y = (*SCY + *LY) & 0xFF;
+  uint16_t tile_y = (bg_y / 8) % 32;
 
-    uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
-    uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
+  uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
+  uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
 
-    uint16_t map_address = background_area + (32 * (bg_y % 32)) + (bg_x % 32);
+  uint16_t map_address = background_area + (32 * (tile_y)) + (bg_x % 32);
 
-    uint8_t bg_pixel_index = bus->Vram.read(map_address - 0x8000);
+  uint8_t bg_pixel_index = bus->Vram.read(map_address - 0x8000);
 
-    uint16_t tile_index;
-    if (tile_data_area == 0x8000) {
-      tile_index = tile_data_area + (uint16_t)(16 * bg_pixel_index);
-    } else {
-      int8_t signed_index = (int8_t)bg_pixel_index;
-      tile_index = 0x9000 + signed_index * 16;
-    }
-
-    if (CGB) {
-      current_bg_tile.attributes =
-          bus->Vram.read(map_address - 0x8000 + 0x2000);
-    }
-    uint8_t bank = (current_bg_tile.attributes >> 3) & 0x01;
-    int row =
-        (bg_attributes & 0x40) ? 7 - ((*SCY + *LY) % 8) : ((*SCY + *LY) % 8);
-    current_bg_tile.tile_id = tile_index + row + (bank * 0x2000);
-    act_cycles -= 2;
-    fetcher_state = FetchLowByte;
-    break;
+  uint16_t tile_index;
+  if (tile_data_area == 0x8000) {
+    tile_index = tile_data_area + (uint16_t)(16 * bg_pixel_index);
+  } else {
+    int8_t signed_index = (int8_t)bg_pixel_index;
+    tile_index = 0x9000 + signed_index * 16;
   }
-  case FetchLowByte:
 
-    current_bg_tile.low_byte =
-        bus->Vram.read((current_bg_tile.tile_id) - 0x8000);
-    act_cycles -= 2;
-    fetcher_state = FetchHighByte;
-    break;
-  case FetchHighByte:
-    current_bg_tile.high_byte =
-        bus->Vram.read((current_bg_tile.tile_id + 0x0001) - 0x8000);
+  if (CGB) {
+    current_bg_tile.attributes = bus->Vram.read(map_address - 0x8000 + 0x2000);
+  }
+  uint8_t bank = (current_bg_tile.attributes >> 3) & 0x01;
+  int row = (current_bg_tile.attributes >> 6) & 0x01 ? 7 - ((bg_y) % 8)
+                                                     : ((bg_y) % 8);
+  current_bg_tile.tile_id =
+      tile_index + (2 * ((*SCY + *LY) % 8)) + (bank * 0x2000);
 
-    for (int i = 0; i < 8; i++) {
-      uint8_t x_flip = (current_bg_tile.attributes >> 5) & 0x01;
+  current_bg_tile.low_byte = bus->Vram.read((current_bg_tile.tile_id) - 0x8000);
 
-      uint8_t low_color_bit;
-      uint8_t high_color_bit;
-      if (x_flip) {
-        low_color_bit = (current_bg_tile.low_byte >> (i)) & 0x01;
-        high_color_bit = ((current_bg_tile.high_byte >> (i)) & 0x01) << 1;
-      } else {
-        low_color_bit = (current_bg_tile.low_byte >> (7 - i)) & 0x01;
-        high_color_bit = ((current_bg_tile.high_byte >> (7 - i)) & 0x01) << 1;
-      }
-      uint8_t color = low_color_bit | high_color_bit;
+  current_bg_tile.high_byte =
+      bus->Vram.read((current_bg_tile.tile_id + 0x0001) - 0x8000);
 
-      bg_fifo[i] = {color, (uint8_t)(current_bg_tile.attributes & 0x07), 0};
+  for (int i = 0; i < 8; i++) {
+    uint8_t x_flip = (current_bg_tile.attributes >> 5) & 0x01;
+
+    uint8_t low_color_bit;
+    uint8_t high_color_bit;
+    if (x_flip) {
+      low_color_bit = (current_bg_tile.low_byte >> (i)) & 0x01;
+      high_color_bit = ((current_bg_tile.high_byte >> (i)) & 0x01) << 1;
+    } else {
+      low_color_bit = (current_bg_tile.low_byte >> (7 - i)) & 0x01;
+      high_color_bit = ((current_bg_tile.high_byte >> (7 - i)) & 0x01) << 1;
     }
-    act_cycles -= 2;
-    fetcher_state = sleep;
-    break;
-  case sleep:
-    act_cycles -= 2;
-    fetcher_state = FetchTileId;
-    fifo_state = BgRender;
-    break;
+    uint8_t color = low_color_bit | high_color_bit;
+
+    bg_fifo.push({color, (uint8_t)(current_bg_tile.attributes & 0x07), 0});
   }
 }
 
@@ -131,13 +112,19 @@ void Ppu::pixelTransfer() {
 
     fifo_state = FirstBG;
     fetcher_state = FetchTileId;
+    while (!bg_fifo.empty()) {
+      bg_fifo.pop();
+    }
+    lx = -8;
+    fx = 0;
+    remaining_cycles = 0;
   }
   obj = nullptr;
   bg_attributes = 0x00;
   pixel_to_draw = 0;
   uint8_t obj_act_pixel = 0;
   int act_obj_index = 0;
-  if ((*LCDC & 0x02) == 0x02) {
+  /*if ((*LCDC & 0x02) == 0x02) {
     for (int i = 0; i < obj_index; i++) {
       if (objects[i]->x > 0 && objects[i]->x < 176) {
         if (lx >= objects[i]->x - 8 && lx < objects[i]->x) {
@@ -158,7 +145,7 @@ void Ppu::pixelTransfer() {
         }
       }
     }
-  }
+  }*/
 
   /*if (obj != nullptr && ((obj->flags & 0x80) != 0x80)) {
     this->getObjPixel(obj);
@@ -167,13 +154,61 @@ void Ppu::pixelTransfer() {
   }*/
 
   if (fifo_state == FirstBG) {
+    if (remaining_cycles > 0) {
+      remaining_cycles--;
+      if (remaining_cycles == 0) {
+        fifo_state = BgRender;
+        remaining_cycles = 8;
+        fx = 0;
+        lx -= (*SCX % 8);
+      }
+      return;
+    }
     getBgTile();
-    if (fetcher_state == sleep) {
-      fifo_state = BgRender;
-      act_cycles -= (*SCX % 8);
+
+    remaining_cycles = 5;
+
+    return;
+  }
+
+  if (fifo_state == BgRender) {
+    if (remaining_cycles == 8) {
+      getBgTile();
+    }
+    // push
+    if (lx >= 0 && !bg_fifo.empty()) {
+      BG_pixel_type bg_pixel = bg_fifo.front();
+      bg_fifo.pop();
+      if (CGB) {
+        uint8_t palette = bg_pixel.palette;
+        uint8_t color = bg_pixel.color;
+        uint8_t bg_priority = bg_pixel.bg_priority;
+
+        uint8_t bg_addr = (palette * 8) + (2 * color);
+        *BGPI = (*BGPI & ~(0x3F)) | bg_addr;
+        uint8_t low_color = bus->read_bg_cram();
+        *BGPI = (*BGPI & ~(0x3F)) | (bg_addr + 1);
+        uint8_t high_color = bus->read_bg_cram();
+        uint16_t bg_color = (high_color << 8) | low_color;
+        this->vga->push_pixel_color(bg_color, lx, *LY);
+      } else {
+        if (bg_pixel.color != 0) {
+          uint8_t bg_color = (*BGP >> (bg_pixel.color * 2)) & 0x03;
+          this->vga->push_pixel(bg_color, lx, *LY);
+        }
+      }
+    } else {
+      bg_fifo.pop();
+    }
+    lx++;
+    fx++;
+    remaining_cycles--;
+    if (remaining_cycles == 0) {
+      remaining_cycles = 8;
     }
     return;
   }
+  return;
 
   uint8_t bg_pixel = 0;
 
@@ -235,7 +270,6 @@ void Ppu::pixelTransfer() {
     }
     this->vga->push_pixel(final_color, lx, *LY);
   }
-  lx++;
 }
 
 uint8_t Ppu::getObjPixel(object_type *obj) {
@@ -523,7 +557,7 @@ void Ppu::step(uint8_t cycles) {
           act_cycles -= 2;
           cycle_counter += 2;
         } else {
-          if (cycle_counter < 252 && *LY < 144 && lx < 160) {
+          if (*LY < 144 && lx < 160) {
             pixelTransfer();
             act_cycles -= 1;
             cycle_counter += 1;
