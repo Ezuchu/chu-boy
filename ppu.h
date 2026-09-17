@@ -41,6 +41,9 @@ class Ppu {
   enum FIFO_State { FirstBG, BgRender, Sprite, FirstW };
   FIFO_State fifo_state = FirstBG;
 
+  enum bg_mode { BG, WINDOW };
+  bg_mode act_bg_mode;
+
   bg_tile current_bg_tile;
 
   std::queue<BG_pixel_type> bg_fifo;
@@ -105,6 +108,7 @@ class Ppu {
   void vBlank();
 
   void getBgTile();
+  void getWinTile();
 
   int fetcher_cycles = 0;
 

@@ -48,17 +48,22 @@ void Ppu::oamSearch() {
   oam_index += 0x04;
 }
 
-void Ppu::getBgTile() {
-
+void Ppu::getWinTile() {
   current_bg_tile = {0, 0, 0, 0};
-  uint16_t bg_x = ((*SCX + fx) & 255) / 8;
-  uint16_t bg_y = (*SCY + *LY) & 0xFF;
+  if (!CGB && !(*LCDC & 0x01)) {
+    for (int i = 0; i < 8; i++) {
+      bg_fifo.push({0, 0, 0});
+    }
+    return;
+  }
+  uint16_t bg_x = fx % 32;
+  uint16_t bg_y = (*LY - *WY) & 0xFF;
   uint16_t tile_y = (bg_y / 8) % 32;
 
-  uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
+  uint16_t window_area = ((*LCDC & 0x40) == 0x40) ? 0x9C00 : 0x9800;
   uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
 
-  uint16_t map_address = background_area + (32 * (tile_y)) + (bg_x % 32);
+  uint16_t map_address = window_area + (32 * (tile_y)) + (bg_x);
 
   uint8_t bg_pixel_index = bus->Vram.read(map_address - 0x8000);
 
@@ -76,8 +81,65 @@ void Ppu::getBgTile() {
   uint8_t bank = (current_bg_tile.attributes >> 3) & 0x01;
   int row = (current_bg_tile.attributes >> 6) & 0x01 ? 7 - ((bg_y) % 8)
                                                      : ((bg_y) % 8);
-  current_bg_tile.tile_id =
-      tile_index + (2 * ((*SCY + *LY) % 8)) + (bank * 0x2000);
+  current_bg_tile.tile_id = tile_index + (2 * row) + (bank * 0x2000);
+
+  current_bg_tile.low_byte = bus->Vram.read((current_bg_tile.tile_id) - 0x8000);
+
+  current_bg_tile.high_byte =
+      bus->Vram.read((current_bg_tile.tile_id + 0x0001) - 0x8000);
+
+  for (int i = 0; i < 8; i++) {
+    uint8_t x_flip = (current_bg_tile.attributes >> 5) & 0x01;
+
+    uint8_t low_color_bit;
+    uint8_t high_color_bit;
+    if (x_flip) {
+      low_color_bit = (current_bg_tile.low_byte >> (i)) & 0x01;
+      high_color_bit = ((current_bg_tile.high_byte >> (i)) & 0x01) << 1;
+    } else {
+      low_color_bit = (current_bg_tile.low_byte >> (7 - i)) & 0x01;
+      high_color_bit = ((current_bg_tile.high_byte >> (7 - i)) & 0x01) << 1;
+    }
+    uint8_t color = low_color_bit | high_color_bit;
+
+    bg_fifo.push({color, (uint8_t)(current_bg_tile.attributes & 0x07), 0});
+  }
+}
+
+void Ppu::getBgTile() {
+  current_bg_tile = {0, 0, 0, 0};
+  if (!CGB && !(*LCDC & 0x01)) {
+    for (int i = 0; i < 8; i++) {
+      bg_fifo.push({0, 0, 0});
+    }
+    return;
+  }
+  uint16_t bg_x = ((*SCX / 8) + fx) % 32;
+  uint16_t bg_y = (*SCY + *LY) & 0xFF;
+  uint16_t tile_y = (bg_y / 8) % 32;
+
+  uint16_t background_area = ((*LCDC & 0x08) == 0x08) ? 0x9C00 : 0x9800;
+  uint16_t tile_data_area = ((*LCDC & 0x10) == 0x10) ? 0x8000 : 0x8800;
+
+  uint16_t map_address = background_area + (32 * (tile_y)) + (bg_x);
+
+  uint8_t bg_pixel_index = bus->Vram.read(map_address - 0x8000);
+
+  uint16_t tile_index;
+  if (tile_data_area == 0x8000) {
+    tile_index = tile_data_area + (uint16_t)(16 * bg_pixel_index);
+  } else {
+    int8_t signed_index = (int8_t)bg_pixel_index;
+    tile_index = 0x9000 + signed_index * 16;
+  }
+
+  if (CGB) {
+    current_bg_tile.attributes = bus->Vram.read(map_address - 0x8000 + 0x2000);
+  }
+  uint8_t bank = (current_bg_tile.attributes >> 3) & 0x01;
+  int row = (current_bg_tile.attributes >> 6) & 0x01 ? 7 - ((bg_y) % 8)
+                                                     : ((bg_y) % 8);
+  current_bg_tile.tile_id = tile_index + (2 * row) + (bank * 0x2000);
 
   current_bg_tile.low_byte = bus->Vram.read((current_bg_tile.tile_id) - 0x8000);
 
@@ -118,6 +180,7 @@ void Ppu::pixelTransfer() {
     lx = -8;
     fx = 0;
     remaining_cycles = 0;
+    act_bg_mode = BG;
   }
   obj = nullptr;
   bg_attributes = 0x00;
@@ -171,9 +234,40 @@ void Ppu::pixelTransfer() {
     return;
   }
 
+  if (fifo_state == FirstW) {
+    if (remaining_cycles < 5) {
+      remaining_cycles--;
+      if (remaining_cycles == 0) {
+        fifo_state = BgRender;
+        remaining_cycles = 8;
+        fx = 1;
+      }
+      return;
+    }
+    fx = 0;
+    getWinTile();
+    remaining_cycles--;
+    return;
+  }
+
   if (fifo_state == BgRender) {
+    if ((*LCDC & 0x20) != 0 && *WY <= *LY && (lx == (int)(*WX - 7)) &&
+        act_bg_mode == BG) {
+      while (!bg_fifo.empty()) {
+        bg_fifo.pop();
+      }
+      fifo_state = FirstW;
+      act_bg_mode = WINDOW;
+      remaining_cycles = 5;
+      return;
+    }
     if (remaining_cycles == 8) {
-      getBgTile();
+      if (act_bg_mode == BG) {
+        getBgTile();
+      } else {
+        getWinTile();
+      }
+      fx++;
     }
     // push
     if (lx >= 0 && !bg_fifo.empty()) {
@@ -201,7 +295,7 @@ void Ppu::pixelTransfer() {
       bg_fifo.pop();
     }
     lx++;
-    fx++;
+
     remaining_cycles--;
     if (remaining_cycles == 0) {
       remaining_cycles = 8;
