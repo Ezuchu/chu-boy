@@ -1,5 +1,6 @@
 #include "ppu.h"
 #include "bus.h"
+#include <algorithm>
 #include <cstdint>
 
 Ppu::Ppu() { ppu_was_on = true; }
@@ -46,6 +47,57 @@ void Ppu::oamSearch() {
     }
   }
   oam_index += 0x04;
+}
+
+void Ppu::getObjTile() {
+  int obj_x = current_object.x - 8;
+  int obj_y = (int)*LY - ((int)current_object.y - 16);
+  uint8_t obj_flags = current_object.flags;
+  uint8_t obj_tile = current_object.tile;
+
+  int sprite_height = (*LCDC & 0x04) ? 16 : 8;
+
+  uint8_t y_flip = (obj_flags & 0x40) ? 1 : 0;
+  uint8_t x_flip = (obj_flags & 0x20) ? 1 : 0;
+
+  int row = y_flip ? (sprite_height - 1 - obj_y) : obj_y;
+
+  if (sprite_height == 16) {
+    obj_tile = (obj_tile & 0xFE);
+    if (row >= 8) {
+      obj_tile |= 1;
+      row -= 8;
+    }
+  }
+
+  uint16_t tile_data_address = 0x8000 + (uint16_t)(16 * obj_tile);
+
+  uint8_t bank = CGB ? (obj_flags >> 3) & 0x01 : 0x00;
+
+  uint8_t obj_pixel_low =
+      bus->Vram.read(tile_data_address + (2 * row) - 0x8000 + (bank * 0x2000));
+  uint8_t obj_pixel_high = bus->Vram.read(tile_data_address + (2 * row) +
+                                          0x0001 - 0x8000 + (bank * 0x2000));
+
+  while (obj_fifo.size() < 8) {
+    obj_fifo.push_back({0, 0, 1, 0});
+  }
+  for (int i = 0; i < 8; i++) {
+    int pixel_num = x_flip ? i : 7 - i;
+    uint8_t obj_pixel = ((obj_pixel_high >> (pixel_num)) & 0x01) << 1 |
+                        ((obj_pixel_low >> (pixel_num)) & 0x01);
+    if (obj_pixel == 0)
+      continue;
+    if (obj_fifo[i].color == 0 || (CGB && obj_fifo[i].index < act_obj_index)) {
+      if (CGB) {
+        obj_fifo[i] = {obj_pixel, (uint8_t)(obj_flags & 0x07),
+                       (uint8_t)(obj_flags >> 7), act_obj_index};
+      } else {
+        obj_fifo[i] = {obj_pixel, (uint8_t)(obj_flags >> 4 & 0x01),
+                       (uint8_t)(obj_flags >> 7), act_obj_index};
+      }
+    }
+  }
 }
 
 void Ppu::getWinTile() {
@@ -102,7 +154,8 @@ void Ppu::getWinTile() {
     }
     uint8_t color = low_color_bit | high_color_bit;
 
-    bg_fifo.push({color, (uint8_t)(current_bg_tile.attributes & 0x07), 0});
+    bg_fifo.push({color, (uint8_t)(current_bg_tile.attributes & 0x07),
+                  (uint8_t)(current_bg_tile.attributes >> 7)});
   }
 }
 
@@ -160,7 +213,8 @@ void Ppu::getBgTile() {
     }
     uint8_t color = low_color_bit | high_color_bit;
 
-    bg_fifo.push({color, (uint8_t)(current_bg_tile.attributes & 0x07), 0});
+    bg_fifo.push({color, (uint8_t)(current_bg_tile.attributes & 0x07),
+                  (uint8_t)(current_bg_tile.attributes >> 7)});
   }
 }
 
@@ -170,7 +224,6 @@ void Ppu::pixelTransfer() {
     this->state = Pixeltransfer;
 
     *STAT = (*STAT & 0xFC) | 0x03;
-    act_obj_index = 0;
 
     fifo_state = FirstBG;
     fetcher_state = FetchTileId;
@@ -181,12 +234,17 @@ void Ppu::pixelTransfer() {
     fx = 0;
     remaining_cycles = 0;
     act_bg_mode = BG;
+    delayed_sprite_fetch = false;
+    act_obj_index = 0;
+
+    std::sort(objects, objects + obj_index,
+              [](object_type *a, object_type *b) { return a->x < b->x; });
   }
   obj = nullptr;
   bg_attributes = 0x00;
   pixel_to_draw = 0;
-  uint8_t obj_act_pixel = 0;
-  int act_obj_index = 0;
+
+  int obj_act_pixel = 0;
   /*if ((*LCDC & 0x02) == 0x02) {
     for (int i = 0; i < obj_index; i++) {
       if (objects[i]->x > 0 && objects[i]->x < 176) {
@@ -250,7 +308,35 @@ void Ppu::pixelTransfer() {
     return;
   }
 
+  if (fifo_state == Sprite) {
+    if (remaining_cycles == 0) {
+      remaining_cycles = 8;
+      fifo_state = BgRender;
+      act_obj_index++;
+      return;
+    }
+    remaining_cycles--;
+    return;
+  }
+
   if (fifo_state == BgRender) {
+
+    if (act_obj_index < obj_index && objects[act_obj_index]->x - 8 == lx) {
+      current_object = *objects[act_obj_index];
+      getObjTile();
+      if (!delayed_sprite_fetch &&
+          (remaining_cycles > 2 && remaining_cycles < 8)) {
+        delayed_sprite_fetch = true;
+        remaining_cycles = remaining_cycles - 3 + 5;
+      } else {
+        remaining_cycles = 5;
+      }
+      fifo_state = Sprite;
+      if ((*LCDC & 0x02) != 0x02) {
+        obj_index = 0;
+      }
+      return;
+    }
     if ((*LCDC & 0x20) != 0 && *WY <= *LY && (lx == (int)(*WX - 7)) &&
         act_bg_mode == BG) {
       while (!bg_fifo.empty()) {
@@ -270,33 +356,68 @@ void Ppu::pixelTransfer() {
       fx++;
     }
     // push
+    while (obj_fifo.size() < 8) {
+      obj_fifo.push_back({0, 0, 1, 0});
+    }
     if (lx >= 0 && !bg_fifo.empty()) {
       BG_pixel_type bg_pixel = bg_fifo.front();
+      OBJ_pixel_type obj_pixel = obj_fifo.front();
+      if (!((*LCDC >> 1) & 0x01)) {
+        obj_pixel = {0, 0, 1, 0};
+      }
       bg_fifo.pop();
-      if (CGB) {
-        uint8_t palette = bg_pixel.palette;
-        uint8_t color = bg_pixel.color;
-        uint8_t bg_priority = bg_pixel.bg_priority;
+      obj_fifo.pop_front();
+      if (obj_pixel.color != 0 &&
+          !(bg_pixel.color != 0 && (*LCDC & 0x01) &&
+            (obj_pixel.obj_priority || bg_pixel.bg_priority))) {
+        // sprite color
+        if (CGB) {
+          uint8_t palette_index = obj_pixel.palette;
+          uint8_t color_address =
+              ((palette_index * 8) + (2 * obj_pixel.color)) & 0x3F;
+          *OBPI = (*OBPI & ~(0x3F)) | color_address;
+          uint8_t low_color = bus->read_ob_cram();
+          *OBPI = (*OBPI & ~(0x3F)) | (color_address + 1);
+          uint8_t high_color = bus->read_ob_cram();
+          uint16_t obj_color = (high_color << 8) | low_color;
 
-        uint8_t bg_addr = (palette * 8) + (2 * color);
-        *BGPI = (*BGPI & ~(0x3F)) | bg_addr;
-        uint8_t low_color = bus->read_bg_cram();
-        *BGPI = (*BGPI & ~(0x3F)) | (bg_addr + 1);
-        uint8_t high_color = bus->read_bg_cram();
-        uint16_t bg_color = (high_color << 8) | low_color;
-        this->vga->push_pixel_color(bg_color, lx, *LY);
+          this->vga->push_pixel_color(obj_color, lx, *LY);
+        } else {
+          uint8_t palette = obj_pixel.palette ? *OBP1 : *OBP0;
+          uint8_t obj_color = (palette >> (obj_pixel.color * 2)) & 0x03;
+          this->vga->push_pixel(obj_color, lx, *LY);
+        }
       } else {
-        if (bg_pixel.color != 0) {
-          uint8_t bg_color = (*BGP >> (bg_pixel.color * 2)) & 0x03;
-          this->vga->push_pixel(bg_color, lx, *LY);
+        if (CGB) {
+          uint8_t palette = bg_pixel.palette;
+          uint8_t color = bg_pixel.color;
+          uint8_t bg_priority = bg_pixel.bg_priority;
+
+          uint8_t bg_addr = (palette * 8) + (2 * color);
+          *BGPI = (*BGPI & ~(0x3F)) | bg_addr;
+          uint8_t low_color = bus->read_bg_cram();
+          *BGPI = (*BGPI & ~(0x3F)) | (bg_addr + 1);
+          uint8_t high_color = bus->read_bg_cram();
+          uint16_t bg_color = (high_color << 8) | low_color;
+          this->vga->push_pixel_color(bg_color, lx, *LY);
+        } else {
+          if (bg_pixel.color != 0) {
+            uint8_t bg_color = (*BGP >> (bg_pixel.color * 2)) & 0x03;
+            this->vga->push_pixel(bg_color, lx, *LY);
+          }
         }
       }
     } else {
       bg_fifo.pop();
+      obj_fifo.pop_front();
     }
     lx++;
 
     remaining_cycles--;
+
+    if (remaining_cycles == 2) {
+      delayed_sprite_fetch = false;
+    }
     if (remaining_cycles == 0) {
       remaining_cycles = 8;
     }

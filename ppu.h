@@ -2,6 +2,7 @@
 
 #include "vga.h"
 #include <cstdint>
+#include <deque>
 #include <queue>
 
 class Bus;
@@ -33,6 +34,7 @@ class Ppu {
     uint8_t color;
     uint8_t palette;
     uint8_t obj_priority;
+    uint8_t index;
   };
 
   enum Fetcher_State { FetchTileId, FetchLowByte, FetchHighByte, sleep };
@@ -45,12 +47,15 @@ class Ppu {
   bg_mode act_bg_mode;
 
   bg_tile current_bg_tile;
+  object_type current_object;
 
   std::queue<BG_pixel_type> bg_fifo;
-  std::queue<OBJ_pixel_type> obj_fifo;
+  std::deque<OBJ_pixel_type> obj_fifo;
 
   int bg_fifo_index = 0;
   int obj_fifo_index = 0;
+
+  bool delayed_sprite_fetch;
 
   bool ppu_was_on;
 
@@ -109,6 +114,7 @@ class Ppu {
 
   void getBgTile();
   void getWinTile();
+  void getObjTile();
 
   int fetcher_cycles = 0;
 
